@@ -8,7 +8,7 @@ import 'db_helper.dart';
 import 'note_form.dart';
 import 'settings_screen.dart';
 import 'tag_scroll.dart';
-import 'fly_menu.dart'; // Импорт на новото плаващо меню
+import 'fly_menu.dart';
 
 void main() {
   runApp(const BusinessOrganizerApp());
@@ -42,11 +42,11 @@ class _MainListScreenState extends State<MainListScreen> {
   final dbHelper = DatabaseHelper();
   List<Map<String, dynamic>> _allItems = [];
   List<Map<String, dynamic>> _filteredItems = [];
-  Set<String> _allExistingTags = {}; 
-  List<String> _selectedFilterTags = []; 
-  
+  Set<String> _allExistingTags = {};
+  List<String> _selectedFilterTags = [];
+
   bool _isGridView = false;
-  int _appBackgroundColor = Colors.white.value;
+  int _appBackgroundColor = Colors.white.toARGB32();
   final TextEditingController _searchController = TextEditingController();
   late StreamSubscription _intentDataStreamSubscription;
 
@@ -68,7 +68,7 @@ class _MainListScreenState extends State<MainListScreen> {
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _appBackgroundColor = prefs.getInt('bg_color') ?? Colors.white.value;
+      _appBackgroundColor = prefs.getInt('bg_color') ?? Colors.white.toARGB32();
     });
   }
 
@@ -136,20 +136,33 @@ class _MainListScreenState extends State<MainListScreen> {
   }
 
   void _filterItems(String query) {
+    final lowercaseQuery = query.toLowerCase();
+
     setState(() {
       _filteredItems = _allItems.where((item) {
         final title = (item['title'] ?? '').toLowerCase();
         final content = (item['content'] ?? '').toLowerCase();
-        final tagsString = (item['tags'] ?? '').toLowerCase();
+        final rawTags = (item['tags'] ?? '');
         
-        bool matchesSearch = title.contains(query.toLowerCase()) || 
-                            content.contains(query.toLowerCase()) ||
-                            tagsString.contains(query.toLowerCase());
+        // Превръщаме таговете на бележката в чист списък (lowercase за сравнение)
+        final List<String> noteTagsList = rawTags
+            .split(',')
+            .map((e) => e.trim().toLowerCase())
+            .where((e) => e.isNotEmpty)
+            .toList();
 
+        // 1. Проверка за търсене по текст
+        bool matchesSearch = title.contains(lowercaseQuery) || 
+                            content.contains(lowercaseQuery) ||
+                            rawTags.toLowerCase().contains(lowercaseQuery);
+
+        // 2. Проверка за филтър по тагове (AND логика с .every)
         bool matchesTags = true;
         if (_selectedFilterTags.isNotEmpty) {
-          final List<String> noteTags = tagsString.split(',').map((e) => e.trim().toLowerCase()).toList();
-          matchesTags = _selectedFilterTags.every((tag) => noteTags.contains(tag.toLowerCase()));
+          // С .every() бележката трябва да съдържа ВСИЧКИ избрани тагове
+          matchesTags = _selectedFilterTags.every((selectedTag) => 
+            noteTagsList.contains(selectedTag.toLowerCase())
+          );
         }
 
         return matchesSearch && matchesTags;
@@ -193,17 +206,17 @@ class _MainListScreenState extends State<MainListScreen> {
       backgroundColor: Color(_appBackgroundColor),
       appBar: AppBar(
         titleSpacing: 0,
-        backgroundColor: Color(_appBackgroundColor).withOpacity(0.9),
+        backgroundColor: Color(_appBackgroundColor).withValues(alpha: 0.9),
         title: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8.0),
           child: TextField(
             controller: _searchController,
-            onChanged: _filterItems,
+            onChanged: (val) => _filterItems(val),
             decoration: InputDecoration(
               hintText: 'Търсене...',
               prefixIcon: const Icon(Icons.search),
               filled: true,
-              fillColor: Colors.black.withOpacity(0.05),
+              fillColor: Colors.black.withValues(alpha: 0.05),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(30),
                 borderSide: BorderSide.none,
@@ -233,8 +246,8 @@ class _MainListScreenState extends State<MainListScreen> {
                 onSelectionChanged: (newList) {
                   setState(() {
                     _selectedFilterTags = newList;
-                    _filterItems(_searchController.text);
                   });
+                  _filterItems(_searchController.text);
                 },
               ),
               Expanded(
@@ -244,7 +257,6 @@ class _MainListScreenState extends State<MainListScreen> {
               ),
             ],
           ),
-          // Плаващото меню FlyMenu стои върху останалото съдържание
           FlyMenu(
             actions: [
               FlyAction(
