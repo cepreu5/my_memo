@@ -46,7 +46,7 @@ class _MainListScreenState extends State<MainListScreen> {
   List<String> _selectedFilterTags = []; 
   
   bool _isGridView = false;
-  int _appBackgroundColor = Colors.white.value;
+  int _appBackgroundColor = Colors.white.toARGB32();
   final TextEditingController _searchController = TextEditingController();
   late StreamSubscription _intentDataStreamSubscription;
 
@@ -68,7 +68,7 @@ class _MainListScreenState extends State<MainListScreen> {
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _appBackgroundColor = prefs.getInt('bg_color') ?? Colors.white.value;
+      _appBackgroundColor = prefs.getInt('bg_color') ?? Colors.white.toARGB32();
     });
   }
 
@@ -136,25 +136,52 @@ class _MainListScreenState extends State<MainListScreen> {
   }
 
   void _filterItems(String query) {
+    final lowercaseQuery = query.trim().toLowerCase();
+    
+    // ТЕСТ: Този принт ТРЯБВА да се появи в Debug Console
+    print("------------------------------------------");
+    print("DEBUG: СТАРТ ФИЛТРИРАНЕ");
+    print("DEBUG: Текст за търсене: '$lowercaseQuery'");
+    print("DEBUG: Избрани тагове във филтъра: $_selectedFilterTags");
+    print("DEBUG: Общо бележки в базата: ${_allItems.length}");
+
     setState(() {
       _filteredItems = _allItems.where((item) {
-        final title = (item['title'] ?? '').toLowerCase();
-        final content = (item['content'] ?? '').toLowerCase();
-        final tagsString = (item['tags'] ?? '').toLowerCase();
+        final title = (item['title'] ?? '').toString().toLowerCase();
+        final content = (item['content'] ?? '').toString().toLowerCase();
+        final String rawTags = (item['tags'] ?? '').toString();
         
-        bool matchesSearch = title.contains(query.toLowerCase()) || 
-                            content.contains(query.toLowerCase()) ||
-                            tagsString.contains(query.toLowerCase());
+        final List<String> noteTagsList = rawTags
+            .split(',')
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toList();
 
+        // Проверка за текст
+        bool matchesSearch = lowercaseQuery.isEmpty || 
+                            title.contains(lowercaseQuery) || 
+                            content.contains(lowercaseQuery);
+
+        // Проверка за тагове
         bool matchesTags = true;
         if (_selectedFilterTags.isNotEmpty) {
-          final List<String> noteTags = tagsString.split(',').map((e) => e.trim().toLowerCase()).toList();
-          matchesTags = _selectedFilterTags.every((tag) => noteTags.contains(tag.toLowerCase()));
+          // Поправка на TypeError: Използваме изричен тип (String tag) и блок със return
+          matchesTags = _selectedFilterTags.any((String selectedTag) {
+            return noteTagsList.contains(selectedTag);
+          });
+        }
+
+        // Лог за всяка бележка (само ако има филтър)
+        if (_selectedFilterTags.isNotEmpty || lowercaseQuery.isNotEmpty) {
+          print("DEBUG: Проверка бележка: '${item['title']}' | Тагове на бележката: $noteTagsList | Резултат: ${matchesSearch && matchesTags}");
         }
 
         return matchesSearch && matchesTags;
       }).toList();
     });
+    
+    print("DEBUG: КРАЙ. Намерени: ${_filteredItems.length}");
+    print("------------------------------------------");
   }
 
   void _openNoteForm({Map<String, dynamic>? initialData}) {
@@ -193,17 +220,17 @@ class _MainListScreenState extends State<MainListScreen> {
       backgroundColor: Color(_appBackgroundColor),
       appBar: AppBar(
         titleSpacing: 0,
-        backgroundColor: Color(_appBackgroundColor).withOpacity(0.9),
+        backgroundColor: Color(_appBackgroundColor).withValues(alpha: 0.9),
         title: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8.0),
           child: TextField(
             controller: _searchController,
-            onChanged: _filterItems,
+            onChanged: (val) => _filterItems(val),
             decoration: InputDecoration(
               hintText: 'Търсене...',
               prefixIcon: const Icon(Icons.search),
               filled: true,
-              fillColor: Colors.black.withOpacity(0.05),
+              fillColor: Colors.black.withValues(alpha: 0.05),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(30),
                 borderSide: BorderSide.none,
@@ -233,8 +260,8 @@ class _MainListScreenState extends State<MainListScreen> {
                 onSelectionChanged: (newList) {
                   setState(() {
                     _selectedFilterTags = newList;
-                    _filterItems(_searchController.text);
                   });
+                  _filterItems(_searchController.text);
                 },
               ),
               Expanded(

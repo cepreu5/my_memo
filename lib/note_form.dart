@@ -488,9 +488,10 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
               if (widget.item?['id'] != null) FlyAction(
                 icon: Icons.delete, 
                 onTap: () async {
+                  final navigator = Navigator.of(context);
                   await dbHelper.deleteItem(widget.item!['id']);
                   widget.onSaved();
-                  if (mounted) Navigator.pop(context);
+                  if (mounted) navigator.pop();
                 },
                 label: "Изтрий"
               ),
@@ -510,7 +511,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.8), 
+        color: Colors.white.withValues(alpha: 0.8), 
         border: const Border(top: BorderSide(color: Colors.black12))
       ),
       child: Column(

@@ -27,13 +27,13 @@ class TagScrollFilter extends StatelessWidget {
     });
 
     return Container(
-      height: 50,
+      height: 40, // Намалена височина за повече компактност
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
           const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 12.0),
-            child: Icon(Icons.label, size: 20, color: Colors.black54),
+            padding: EdgeInsets.symmetric(horizontal: 8.0),
+            child: Icon(Icons.label_outline, size: 18, color: Colors.black54),
           ),
           Expanded(
             child: ListView.builder(
@@ -44,10 +44,18 @@ class TagScrollFilter extends StatelessWidget {
                 final isSelected = selectedTags.contains(tag);
 
                 return Padding(
-                  padding: const EdgeInsets.only(right: 8.0),
+                  padding: const EdgeInsets.only(right: 4.0), // По-малко разстояние между чиповете
                   child: FilterChip(
-                    visualDensity: VisualDensity.compact,
-                    label: Text(tag, style: const TextStyle(fontSize: 12)),
+                    visualDensity: const VisualDensity(horizontal: -4, vertical: -4), // Максимална плътност
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, // Премахва излишното място за докосване
+                    label: Text(
+                      tag, 
+                      style: TextStyle(
+                        fontSize: 10, // По-малък шрифт
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        color: isSelected ? Colors.white : Colors.black87,
+                      ),
+                    ),
                     selected: isSelected,
                     onSelected: (selected) {
                       List<String> newList = List.from(selectedTags);
@@ -59,11 +67,12 @@ class TagScrollFilter extends StatelessWidget {
                       onSelectionChanged(newList);
                     },
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    showCheckmark: true,
-                    selectedColor: Colors.blue.withOpacity(0.2),
-                    checkmarkColor: Colors.blue,
+                    showCheckmark: false, // Премахваме отметката според изискването
+                    selectedColor: Colors.blueAccent, // Изразен цвят за маркиране
+                    backgroundColor: Colors.black.withValues(alpha: 0.05),
+                    side: BorderSide.none, // Премахва рамката за по-изчистен вид
                   ),
                 );
               },
