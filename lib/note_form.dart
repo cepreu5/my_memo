@@ -488,9 +488,10 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
               if (widget.item?['id'] != null) FlyAction(
                 icon: Icons.delete, 
                 onTap: () async {
+                  final navigator = Navigator.of(context);
                   await dbHelper.deleteItem(widget.item!['id']);
                   widget.onSaved();
-                  if (mounted) Navigator.pop(context);
+                  if (mounted) navigator.pop();
                 },
                 label: "Изтрий"
               ),

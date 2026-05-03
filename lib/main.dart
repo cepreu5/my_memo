@@ -8,7 +8,7 @@ import 'db_helper.dart';
 import 'note_form.dart';
 import 'settings_screen.dart';
 import 'tag_scroll.dart';
-import 'fly_menu.dart';
+import 'fly_menu.dart'; 
 
 void main() {
   runApp(const BusinessOrganizerApp());
@@ -46,6 +46,7 @@ class _MainListScreenState extends State<MainListScreen> {
   List<String> _selectedFilterTags = [];
 
   bool _isGridView = false;
+  // Корекция: Използваме .toARGB32()
   int _appBackgroundColor = Colors.white.toARGB32();
   final TextEditingController _searchController = TextEditingController();
   late StreamSubscription _intentDataStreamSubscription;
@@ -68,6 +69,7 @@ class _MainListScreenState extends State<MainListScreen> {
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
+      // Корекция: Използваме .toARGB32()
       _appBackgroundColor = prefs.getInt('bg_color') ?? Colors.white.toARGB32();
     });
   }
@@ -110,6 +112,7 @@ class _MainListScreenState extends State<MainListScreen> {
 
   Future<void> _refreshItems() async {
     final data = await dbHelper.queryAllRows();
+    if (!mounted) return;
     setState(() {
       _allItems = data;
       _updateUniqueTags();
@@ -129,10 +132,8 @@ class _MainListScreenState extends State<MainListScreen> {
         }
       }
     }
-    setState(() {
-      _allExistingTags = tagsSet;
-      _selectedFilterTags.removeWhere((tag) => !tagsSet.contains(tag));
-    });
+    _allExistingTags = tagsSet;
+    _selectedFilterTags.removeWhere((tag) => !tagsSet.contains(tag));
   }
 
   void _filterItems(String query) {
@@ -144,22 +145,18 @@ class _MainListScreenState extends State<MainListScreen> {
         final content = (item['content'] ?? '').toLowerCase();
         final rawTags = (item['tags'] ?? '');
         
-        // Превръщаме таговете на бележката в чист списък (lowercase за сравнение)
         final List<String> noteTagsList = rawTags
             .split(',')
             .map((e) => e.trim().toLowerCase())
             .where((e) => e.isNotEmpty)
             .toList();
 
-        // 1. Проверка за търсене по текст
         bool matchesSearch = title.contains(lowercaseQuery) || 
                             content.contains(lowercaseQuery) ||
                             rawTags.toLowerCase().contains(lowercaseQuery);
 
-        // 2. Проверка за филтър по тагове (AND логика с .every)
         bool matchesTags = true;
         if (_selectedFilterTags.isNotEmpty) {
-          // С .every() бележката трябва да съдържа ВСИЧКИ избрани тагове
           matchesTags = _selectedFilterTags.every((selectedTag) => 
             noteTagsList.contains(selectedTag.toLowerCase())
           );
@@ -170,8 +167,8 @@ class _MainListScreenState extends State<MainListScreen> {
     });
   }
 
-  void _openNoteForm({Map<String, dynamic>? initialData}) {
-    Navigator.push(
+  void _openNoteForm({Map<String, dynamic>? initialData}) async {
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => NoteFormScreen(
@@ -181,6 +178,8 @@ class _MainListScreenState extends State<MainListScreen> {
         ),
       ),
     );
+    // Корекция за BuildContext в async: проверяваме mounted преди да викаме методи на State
+    if (mounted) _refreshItems();
   }
 
   Future<void> _goToSettings() async {
@@ -188,7 +187,7 @@ class _MainListScreenState extends State<MainListScreen> {
       context,
       MaterialPageRoute(builder: (context) => const SettingsScreen()),
     );
-    _loadSettings();
+    if (mounted) _loadSettings();
   }
 
   Future<void> _toggleComplete(Map<String, dynamic> item) async {
@@ -197,16 +196,19 @@ class _MainListScreenState extends State<MainListScreen> {
       ...item,
       'isCompleted': newStatus,
     });
-    _refreshItems();
+    if (mounted) _refreshItems();
   }
 
   @override
   Widget build(BuildContext context) {
+    final bgColor = Color(_appBackgroundColor);
+    
     return Scaffold(
-      backgroundColor: Color(_appBackgroundColor),
+      backgroundColor: bgColor,
       appBar: AppBar(
         titleSpacing: 0,
-        backgroundColor: Color(_appBackgroundColor).withValues(alpha: 0.9),
+        // Корекция: withValues(alpha: 0.9)
+        backgroundColor: bgColor.withValues(alpha: 0.9),
         title: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8.0),
           child: TextField(
@@ -216,6 +218,7 @@ class _MainListScreenState extends State<MainListScreen> {
               hintText: 'Търсене...',
               prefixIcon: const Icon(Icons.search),
               filled: true,
+              // Корекция: withValues(alpha: 0.05)
               fillColor: Colors.black.withValues(alpha: 0.05),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(30),
