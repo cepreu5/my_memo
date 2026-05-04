@@ -50,7 +50,7 @@ class _FlyMenuState extends State<FlyMenu> with SingleTickerProviderStateMixin {
     final size = MediaQuery.of(context).size;
     bool isLeft = _position.dx < size.width / 2;
 
-    // Дефинираме голяма интерактивна зона (250x250), за да не излизат бутоните от нея
+    // Дефинираме голяма интерактивна зона (250x250), за да не излизат бутоните от нея 
     return Positioned(
       left: _position.dx - 125,
       top: _position.dy - 125,
