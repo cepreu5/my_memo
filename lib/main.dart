@@ -46,8 +46,8 @@ class _MainListScreenState extends State<MainListScreen> {
   List<String> _selectedFilterTags = [];
 
   bool _isGridView = false;
-  // Корекция: Използваме .toARGB32()
   int _appBackgroundColor = Colors.white.toARGB32();
+  bool _filterMatchAll = false; // Декларирана променлива за режима на филтриране
   final TextEditingController _searchController = TextEditingController();
   late StreamSubscription _intentDataStreamSubscription;
 
@@ -69,8 +69,8 @@ class _MainListScreenState extends State<MainListScreen> {
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      // Корекция: Използваме .toARGB32()
       _appBackgroundColor = prefs.getInt('bg_color') ?? Colors.white.toARGB32();
+      _filterMatchAll = prefs.getBool('filter_match_all') ?? false;
     });
   }
 
@@ -137,34 +137,52 @@ class _MainListScreenState extends State<MainListScreen> {
   }
 
   void _filterItems(String query) {
-    final lowercaseQuery = query.toLowerCase();
+    final lowercaseQuery = query.trim().toLowerCase();
+    
+    print("------------------------------------------");
+    print("DEBUG: СТАРТ ФИЛТРИРАНЕ (Режим: ${_filterMatchAll ? 'AND' : 'OR'})");
+    print("DEBUG: Текст за търсене: '$lowercaseQuery'");
+    print("DEBUG: Избрани тагове: $_selectedFilterTags");
 
     setState(() {
       _filteredItems = _allItems.where((item) {
-        final title = (item['title'] ?? '').toLowerCase();
-        final content = (item['content'] ?? '').toLowerCase();
-        final rawTags = (item['tags'] ?? '');
+        final title = (item['title'] ?? '').toString().toLowerCase();
+        final content = (item['content'] ?? '').toString().toLowerCase();
+        final String rawTags = (item['tags'] ?? '').toString();
         
         final List<String> noteTagsList = rawTags
             .split(',')
-            .map((e) => e.trim().toLowerCase())
+            .map((e) => e.trim())
             .where((e) => e.isNotEmpty)
             .toList();
 
-        bool matchesSearch = title.contains(lowercaseQuery) || 
-                            content.contains(lowercaseQuery) ||
-                            rawTags.toLowerCase().contains(lowercaseQuery);
+        // 1. Текстово търсене
+        bool matchesSearch = lowercaseQuery.isEmpty || 
+                            title.contains(lowercaseQuery) || 
+                            content.contains(lowercaseQuery);
 
+        // 2. Филтриране по тагове
         bool matchesTags = true;
         if (_selectedFilterTags.isNotEmpty) {
-          matchesTags = _selectedFilterTags.every((selectedTag) => 
-            noteTagsList.contains(selectedTag.toLowerCase())
-          );
+          if (_filterMatchAll) {
+            // AND логика: трябва да съдържа ВСИЧКИ избрани тагове
+            matchesTags = _selectedFilterTags.every((String selectedTag) {
+              return noteTagsList.contains(selectedTag);
+            });
+          } else {
+            // OR логика: трябва да съдържа ПОНЕ ЕДИН от избраните
+            matchesTags = _selectedFilterTags.any((String selectedTag) {
+              return noteTagsList.contains(selectedTag);
+            });
+          }
         }
 
         return matchesSearch && matchesTags;
       }).toList();
     });
+    
+    print("DEBUG: КРАЙ. Намерени: ${_filteredItems.length}");
+    print("------------------------------------------");
   }
 
   void _openNoteForm({Map<String, dynamic>? initialData}) async {
@@ -207,8 +225,7 @@ class _MainListScreenState extends State<MainListScreen> {
       backgroundColor: bgColor,
       appBar: AppBar(
         titleSpacing: 0,
-        // Корекция: withValues(alpha: 0.9)
-        backgroundColor: bgColor.withValues(alpha: 0.9),
+        backgroundColor: Color(_appBackgroundColor).withValues(alpha: 0.9),
         title: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8.0),
           child: TextField(
@@ -218,7 +235,6 @@ class _MainListScreenState extends State<MainListScreen> {
               hintText: 'Търсене...',
               prefixIcon: const Icon(Icons.search),
               filled: true,
-              // Корекция: withValues(alpha: 0.05)
               fillColor: Colors.black.withValues(alpha: 0.05),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(30),
