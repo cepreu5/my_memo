@@ -26,14 +26,24 @@ class TagScrollFilter extends StatelessWidget {
       return a.compareTo(b);
     });
 
+    final bool hasSelection = selectedTags.isNotEmpty;
+
     return Container(
-      height: 40, // Намалена височина за повече компактност
+      height: 40, // Компактна височина
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8.0),
-            child: Icon(Icons.tag, size: 18, color: Colors.black54),
+          // Икона, която става бутон за нулиране при наличие на селекция
+          GestureDetector(
+            onTap: hasSelection ? () => onSelectionChanged([]) : null,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10.0),
+              child: Icon(
+                hasSelection ? Icons.label_off_outlined : Icons.label_outline,
+                size: 20,
+                color: hasSelection ? Colors.redAccent : Colors.black54,
+              ),
+            ),
           ),
           Expanded(
             child: ListView.builder(
@@ -44,14 +54,14 @@ class TagScrollFilter extends StatelessWidget {
                 final isSelected = selectedTags.contains(tag);
 
                 return Padding(
-                  padding: const EdgeInsets.only(right: 4.0), // По-малко разстояние между чиповете
+                  padding: const EdgeInsets.only(right: 4.0),
                   child: FilterChip(
-                    visualDensity: const VisualDensity(horizontal: -4, vertical: -4), // Максимална плътност
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, // Премахва излишното място за докосване
+                    visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     label: Text(
                       tag, 
                       style: TextStyle(
-                        fontSize: 10, // По-малък шрифт
+                        fontSize: 10,
                         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                         color: isSelected ? Colors.white : Colors.black87,
                       ),
@@ -69,10 +79,10 @@ class TagScrollFilter extends StatelessWidget {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    showCheckmark: false, // Премахваме отметката според изискването
-                    selectedColor: Colors.blueAccent, // Изразен цвят за маркиране
+                    showCheckmark: false,
+                    selectedColor: Colors.blueAccent,
                     backgroundColor: Colors.black.withValues(alpha: 0.05),
-                    side: BorderSide.none, // Премахва рамката за по-изчистен вид
+                    side: BorderSide.none,
                   ),
                 );
               },
