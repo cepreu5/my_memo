@@ -11,6 +11,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   int _appBgColor = Colors.white.toARGB32();
   int _defaultNoteColor = Colors.white.toARGB32();
+  bool _filterMatchAll = false; // Логика за тагове: false = OR, true = AND
 
   final List<Color> _availableColors = [
     Colors.white,
@@ -36,12 +37,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {
       _appBgColor = prefs.getInt('bg_color') ?? Colors.white.toARGB32();
       _defaultNoteColor = prefs.getInt('default_note_color') ?? Colors.white.toARGB32();
+      _filterMatchAll = prefs.getBool('filter_match_all') ?? false;
     });
   }
 
-  Future<void> _saveSetting(String key, int value) async {
+  Future<void> _saveSetting(String key, dynamic value) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(key, value);
+    if (value is int) {
+      await prefs.setInt(key, value);
+    } else if (value is bool) {
+      await prefs.setBool(key, value);
+    }
     _loadSettings();
   }
 
@@ -66,6 +72,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildColorPicker(
             selectedColor: _defaultNoteColor,
             onColorSelected: (color) => _saveSetting('default_note_color', color.toARGB32()),
+          ),
+          const Divider(height: 40),
+          _buildSectionTitle('Филтриране на етикети'),
+          SwitchListTile(
+            title: const Text('Стриктно филтриране (AND)'),
+            subtitle: Text(_filterMatchAll 
+              ? 'Показвай бележки, съдържащи ВСИЧКИ избрани етикети' 
+              : 'Показвай бележки, съдържащи ПОНЕ ЕДИН от избраните етикети'),
+            value: _filterMatchAll,
+            onChanged: (val) => _saveSetting('filter_match_all', val),
           ),
         ],
       ),
