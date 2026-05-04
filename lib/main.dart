@@ -8,7 +8,7 @@ import 'db_helper.dart';
 import 'note_form.dart';
 import 'settings_screen.dart';
 import 'tag_scroll.dart';
-import 'fly_menu.dart'; // Импорт на новото плаващо меню
+import 'fly_menu.dart'; 
 
 void main() {
   runApp(const BusinessOrganizerApp());
@@ -42,11 +42,12 @@ class _MainListScreenState extends State<MainListScreen> {
   final dbHelper = DatabaseHelper();
   List<Map<String, dynamic>> _allItems = [];
   List<Map<String, dynamic>> _filteredItems = [];
-  Set<String> _allExistingTags = {}; 
-  List<String> _selectedFilterTags = []; 
-  
+  Set<String> _allExistingTags = {};
+  List<String> _selectedFilterTags = [];
+
   bool _isGridView = false;
   int _appBackgroundColor = Colors.white.toARGB32();
+  bool _filterMatchAll = false; // Декларирана променлива за режима на филтриране
   final TextEditingController _searchController = TextEditingController();
   late StreamSubscription _intentDataStreamSubscription;
 
@@ -69,6 +70,7 @@ class _MainListScreenState extends State<MainListScreen> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _appBackgroundColor = prefs.getInt('bg_color') ?? Colors.white.toARGB32();
+      _filterMatchAll = prefs.getBool('filter_match_all') ?? false;
     });
   }
 
@@ -110,6 +112,7 @@ class _MainListScreenState extends State<MainListScreen> {
 
   Future<void> _refreshItems() async {
     final data = await dbHelper.queryAllRows();
+    if (!mounted) return;
     setState(() {
       _allItems = data;
       _updateUniqueTags();
@@ -129,21 +132,17 @@ class _MainListScreenState extends State<MainListScreen> {
         }
       }
     }
-    setState(() {
-      _allExistingTags = tagsSet;
-      _selectedFilterTags.removeWhere((tag) => !tagsSet.contains(tag));
-    });
+    _allExistingTags = tagsSet;
+    _selectedFilterTags.removeWhere((tag) => !tagsSet.contains(tag));
   }
 
   void _filterItems(String query) {
     final lowercaseQuery = query.trim().toLowerCase();
     
-    // ТЕСТ: Този принт ТРЯБВА да се появи в Debug Console
     print("------------------------------------------");
-    print("DEBUG: СТАРТ ФИЛТРИРАНЕ");
+    print("DEBUG: СТАРТ ФИЛТРИРАНЕ (Режим: ${_filterMatchAll ? 'AND' : 'OR'})");
     print("DEBUG: Текст за търсене: '$lowercaseQuery'");
-    print("DEBUG: Избрани тагове във филтъра: $_selectedFilterTags");
-    print("DEBUG: Общо бележки в базата: ${_allItems.length}");
+    print("DEBUG: Избрани тагове: $_selectedFilterTags");
 
     setState(() {
       _filteredItems = _allItems.where((item) {
@@ -157,23 +156,25 @@ class _MainListScreenState extends State<MainListScreen> {
             .where((e) => e.isNotEmpty)
             .toList();
 
-        // Проверка за текст
+        // 1. Текстово търсене
         bool matchesSearch = lowercaseQuery.isEmpty || 
                             title.contains(lowercaseQuery) || 
                             content.contains(lowercaseQuery);
 
-        // Проверка за тагове
+        // 2. Филтриране по тагове
         bool matchesTags = true;
         if (_selectedFilterTags.isNotEmpty) {
-          // Поправка на TypeError: Използваме изричен тип (String tag) и блок със return
-          matchesTags = _selectedFilterTags.any((String selectedTag) {
-            return noteTagsList.contains(selectedTag);
-          });
-        }
-
-        // Лог за всяка бележка (само ако има филтър)
-        if (_selectedFilterTags.isNotEmpty || lowercaseQuery.isNotEmpty) {
-          print("DEBUG: Проверка бележка: '${item['title']}' | Тагове на бележката: $noteTagsList | Резултат: ${matchesSearch && matchesTags}");
+          if (_filterMatchAll) {
+            // AND логика: трябва да съдържа ВСИЧКИ избрани тагове
+            matchesTags = _selectedFilterTags.every((String selectedTag) {
+              return noteTagsList.contains(selectedTag);
+            });
+          } else {
+            // OR логика: трябва да съдържа ПОНЕ ЕДИН от избраните
+            matchesTags = _selectedFilterTags.any((String selectedTag) {
+              return noteTagsList.contains(selectedTag);
+            });
+          }
         }
 
         return matchesSearch && matchesTags;
@@ -184,8 +185,8 @@ class _MainListScreenState extends State<MainListScreen> {
     print("------------------------------------------");
   }
 
-  void _openNoteForm({Map<String, dynamic>? initialData}) {
-    Navigator.push(
+  void _openNoteForm({Map<String, dynamic>? initialData}) async {
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => NoteFormScreen(
@@ -195,6 +196,8 @@ class _MainListScreenState extends State<MainListScreen> {
         ),
       ),
     );
+    // Корекция за BuildContext в async: проверяваме mounted преди да викаме методи на State
+    if (mounted) _refreshItems();
   }
 
   Future<void> _goToSettings() async {
@@ -202,7 +205,7 @@ class _MainListScreenState extends State<MainListScreen> {
       context,
       MaterialPageRoute(builder: (context) => const SettingsScreen()),
     );
-    _loadSettings();
+    if (mounted) _loadSettings();
   }
 
   Future<void> _toggleComplete(Map<String, dynamic> item) async {
@@ -211,13 +214,15 @@ class _MainListScreenState extends State<MainListScreen> {
       ...item,
       'isCompleted': newStatus,
     });
-    _refreshItems();
+    if (mounted) _refreshItems();
   }
 
   @override
   Widget build(BuildContext context) {
+    final bgColor = Color(_appBackgroundColor);
+    
     return Scaffold(
-      backgroundColor: Color(_appBackgroundColor),
+      backgroundColor: bgColor,
       appBar: AppBar(
         titleSpacing: 0,
         backgroundColor: Color(_appBackgroundColor).withValues(alpha: 0.9),
@@ -271,7 +276,6 @@ class _MainListScreenState extends State<MainListScreen> {
               ),
             ],
           ),
-          // Плаващото меню FlyMenu стои върху останалото съдържание
           FlyMenu(
             actions: [
               FlyAction(
