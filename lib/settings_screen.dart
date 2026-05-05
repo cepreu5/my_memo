@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'color_picker_helper.dart';
+import 'db_viewer.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -139,6 +140,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
             keyName: 'max_lines_grid',
             onChanged: (val) => setState(() => _maxLinesGrid = val),
           ),
+          ListTile(
+            leading: const Icon(Icons.storage),
+            title: const Text('Преглед на сурови данни'),
+            subtitle: const Text('Контрол на записите в базата един по един'),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const DbViewerScreen()),
+              );
+            },
+          ),
+
         ],
       ),
     );

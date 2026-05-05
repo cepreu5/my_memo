@@ -1,6 +1,7 @@
 adb install "C:\dev\Projects\Androd\my_scr\android\app\build\outputs\flutter-apk\app-debug.apk"
 adb uninstall com.example.my_scr
 adb shell pm list packages | findstr "my_scr"
+
 да го накараш да се отвори през терминала:
 adb shell monkey -p com.example.my_scr -c android.intent.category.LAUNCHER 1
 

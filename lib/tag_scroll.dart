@@ -15,7 +15,6 @@ class TagScrollFilter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (allTags.isEmpty) return const SizedBox.shrink();
-
     // Сортираме етикетите така, че избраните да са най-отпред
     final List<String> sortedTags = List.from(allTags);
     sortedTags.sort((a, b) {
@@ -25,9 +24,7 @@ class TagScrollFilter extends StatelessWidget {
       if (!aSelected && bSelected) return 1;
       return a.compareTo(b);
     });
-
     final bool hasSelection = selectedTags.isNotEmpty;
-
     return Container(
       height: 40, // Компактна височина
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -41,7 +38,7 @@ class TagScrollFilter extends StatelessWidget {
               child: Icon(
                 hasSelection ? Icons.label_off_outlined : Icons.label_outline,
                 size: 20,
-                color: hasSelection ? Colors.redAccent : Colors.black54,
+                color: hasSelection ? Colors.blueAccent : Colors.black54,
               ),
             ),
           ),
@@ -52,12 +49,13 @@ class TagScrollFilter extends StatelessWidget {
               itemBuilder: (context, index) {
                 final tag = sortedTags[index];
                 final isSelected = selectedTags.contains(tag);
-
                 return Padding(
                   padding: const EdgeInsets.only(right: 4.0),
                   child: FilterChip(
                     visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    padding: EdgeInsets.zero,
+                    labelPadding: const EdgeInsets.symmetric(horizontal: 4.0),
                     label: Text(
                       tag, 
                       style: TextStyle(

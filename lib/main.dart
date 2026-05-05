@@ -20,7 +20,7 @@ class BusinessOrganizerApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Бизнес Органайзер',
+      title: 'my memo',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primarySwatch: Colors.blue,
@@ -92,6 +92,15 @@ class _MainListScreenState extends State<MainListScreen> {
     final sharedFile = media.first;
     if (sharedFile.type == SharedMediaType.text || sharedFile.type == SharedMediaType.url) {
       _handleSharedText(sharedFile.path);
+    } else if (sharedFile.type == SharedMediaType.video) {
+      _openNoteForm(initialData: {
+        'title': 'Споделено видео',
+        'content': 'Видео файл: ${sharedFile.path}',
+        'id': null,
+        'color': null,
+        'isCompleted': 0,
+        'tags': null,
+      });
     } else {
       _openNoteForm(initialData: {
         'imagePath': sharedFile.path,
@@ -532,7 +541,7 @@ class _MainListScreenState extends State<MainListScreen> {
   String _formatDateTime(String isoString) {
     try {
       final dt = DateTime.parse(isoString);
-      return "${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
+      return "${dt.day}.${dt.month.toString().padLeft(2, '0')} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}";
     } catch (e) {
       return '';
     }

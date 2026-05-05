@@ -64,7 +64,14 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       _contentController.text = widget.item!['content']?.toString() ?? "";
       _imagePath = widget.item!['imagePath'];
       _isLocalCopy = widget.item!['isLocalCopy'] ?? 0;
-      _shouldCopyLocally = _isLocalCopy == 1;
+
+      // Ако е нова бележка (напр. от споделяне) и имаме изображение, което още не е локално копие,
+      // го маркираме за копиране при запис, за да гарантираме персистентност на ресурса.
+      if (widget.item!['id'] == null && _imagePath != null && _isLocalCopy == 0) {
+        _shouldCopyLocally = true;
+      } else {
+        _shouldCopyLocally = _isLocalCopy == 1;
+      }
       
       // Зареждане на етикети
       if (widget.item!['tags'] != null && widget.item!['tags'].toString().isNotEmpty) {
@@ -225,13 +232,18 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       final pickedFile = await picker.pickImage(source: ImageSource.gallery);
       if (pickedFile != null) {
         final croppedPath = await _cropImage(pickedFile.path);
-        if (croppedPath != null) {
-          setState(() {
+        setState(() {
+          if (croppedPath != null) {
+            // Ако е изрязано, използваме новия временен файл и го маркираме за локално записване
             _imagePath = croppedPath;
-            _isLocalCopy = 0; 
-            _shouldCopyLocally = true; 
-          });
-        }
+            _shouldCopyLocally = true;
+          } else {
+            // Ако изрязването е отказано, ползваме оригиналния път от галерията и НЕ копираме файла първоначално
+            _imagePath = pickedFile.path;
+            _shouldCopyLocally = false;
+          }
+          _isLocalCopy = 0;
+        });
       }
     } catch (e) {
       debugPrint("Грешка галерия: $e");
@@ -375,7 +387,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   Widget build(BuildContext context) {
     String reminderText = 'Напомняне';
     if (_reminderTime != null) {
-      reminderText = '${_reminderTime!.day}.${_reminderTime!.month} ${_reminderTime!.hour.toString().padLeft(2, '0')}:${_reminderTime!.minute.toString().padLeft(2, '0')}';
+      reminderText = '${_reminderTime!.day}.${_reminderTime!.month.toString().padLeft(2, '0')} ${_reminderTime!.hour}:${_reminderTime!.minute.toString().padLeft(2, '0')}';
     }
 
     return Scaffold(
