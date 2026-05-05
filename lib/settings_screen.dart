@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'color_picker_helper.dart';
 import 'db_viewer.dart';
+import 'local_files_viewer.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -148,6 +149,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const DbViewerScreen()),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.folder_open),
+            title: const Text('Преглед на локални файлове'),
+            subtitle: const Text('Директен преглед на снимките в паметта'),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const LocalFilesViewerScreen()),
               );
             },
           ),

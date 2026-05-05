@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 import 'db_helper.dart';
 
 class DbViewerScreen extends StatefulWidget {
@@ -50,11 +51,49 @@ class _DbViewerScreenState extends State<DbViewerScreen> {
             IconButton(
               icon: const Icon(Icons.delete_forever, color: Colors.red),
               onPressed: () async {
-                final id = _records[_currentIndex]['id'];
-                await dbHelper.deleteItem(id);
-                _loadRecords();
-                if (_currentIndex > 0) {
-                  setState(() => _currentIndex--);
+                final record = _records[_currentIndex];
+                final int id = record['id'];
+                final String? imagePath = record['imagePath'];
+                final bool isLocal = record['isLocalCopy'] == 1;
+
+                String contentText = 'Сигурни ли сте, че искате да изтриете този запис?';
+                if (isLocal && imagePath != null) {
+                  contentText += '\n\nВнимание: Локалното копие на файла (${imagePath.split('/').last}) също ще бъде изтрито от паметта на приложението.';
+                }
+
+                final bool confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Потвърждение'),
+                    content: Text(contentText),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отказ')),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('Изтрий', style: TextStyle(color: Colors.red)),
+                      ),
+                    ],
+                  ),
+                ) ?? false;
+
+                if (confirm) {
+                  // 1. Първо изтриваме физическия файл, ако е локален
+                  if (isLocal && imagePath != null) {
+                    try {
+                      final file = File(imagePath);
+                      if (await file.exists()) await file.delete();
+                    } catch (e) {
+                      debugPrint("Грешка при изтриване на файл: $e");
+                    }
+                  }
+                  // 2. Изтриваме записа от базата данни
+                  await dbHelper.deleteItem(id);
+                  await _loadRecords();
+                  
+                  // Коригираме индекса, ако сме изтрили последния елемент
+                  if (_currentIndex >= _records.length && _currentIndex > 0) {
+                    setState(() => _currentIndex = _records.length - 1);
+                  }
                 }
               },
               tooltip: 'Изтрий записа от БД',
@@ -74,6 +113,20 @@ class _DbViewerScreenState extends State<DbViewerScreen> {
                         style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                     ),
+                    if (_records[_currentIndex]['imagePath'] != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        child: Container(
+                          height: 150,
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey),
+                          ),
+                          child: Image.file(
+                            File(_records[_currentIndex]['imagePath']),
+                            errorBuilder: (context, error, stackTrace) => const Center(child: Text("Файлът не е намерен")),
+                          ),
+                        ),
+                      ),
                     Expanded(
                       child: ListView(
                         padding: const EdgeInsets.symmetric(horizontal: 16),

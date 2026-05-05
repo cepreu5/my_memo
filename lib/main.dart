@@ -462,7 +462,11 @@ class _MainListScreenState extends State<MainListScreen> {
               borderRadius: BorderRadius.circular(8),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 100, maxWidth: 100),
-                child: Image.file(File(item['imagePath']), fit: BoxFit.cover),
+                child: Image.file(
+                  File(item['imagePath']), 
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, color: Colors.grey),
+                ),
               ),
             ),
           ),
@@ -480,7 +484,11 @@ class _MainListScreenState extends State<MainListScreen> {
               child: Container(
                 width: double.infinity,
                 alignment: Alignment.topCenter,
-                child: Image.file(File(item['imagePath']), fit: BoxFit.contain),
+                child: Image.file(
+                  File(item['imagePath']), 
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => const Padding(padding: EdgeInsets.all(20), child: Icon(Icons.broken_image, color: Colors.grey)),
+                ),
               ),
             ),
           ),
@@ -521,6 +529,20 @@ class _MainListScreenState extends State<MainListScreen> {
           ) ?? false;
         },
         onDismissed: (direction) async {
+          // Проверка дали бележката има локално копие на файл и го изтриваме
+          final String? imagePath = item['imagePath'];
+          final bool isLocal = item['isLocalCopy'] == 1;
+
+          if (isLocal && imagePath != null) {
+            try {
+              final file = File(imagePath);
+              if (await file.exists()) {
+                await file.delete();
+              }
+            } catch (e) {
+              debugPrint("Грешка при изтриване на локален файл: $e");
+            }
+          }
           await dbHelper.deleteItem(item['id']);
           _refreshItems();
         },

@@ -38,6 +38,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   int _isLocalCopy = 0; 
   bool _shouldCopyLocally = false;
   List<String> _selectedTags = []; // Избраните етикети за текущата бележка
+  bool _sessionFileCreated = false; // Следи дали е създаден файл в тази сесия (напр. от камера)
   
   final dbHelper = DatabaseHelper();
   bool _isEditing = false;
@@ -263,6 +264,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
               _imagePath = copiedPath;
               _isLocalCopy = 1;
               _shouldCopyLocally = true;
+              _sessionFileCreated = true;
             });
           }
         }
@@ -390,7 +392,48 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       reminderText = '${_reminderTime!.day}.${_reminderTime!.month.toString().padLeft(2, '0')} ${_reminderTime!.hour}:${_reminderTime!.minute.toString().padLeft(2, '0')}';
     }
 
-    return Scaffold(
+    return PopScope(
+      canPop: false, // Предотвратява автоматичното излизане
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+
+        // Ако не сме в режим на редактиране, излизаме веднага
+        if (!_isEditing) {
+          Navigator.of(context).pop();
+          return;
+        }
+
+        // Показваме диалог за потвърждение
+        final bool shouldPop = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Отхвърляне на промените?'),
+            content: const Text('Имате незапазени промени. Сигурни ли сте, че искате да излезете?'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отказ')),
+              TextButton(
+                onPressed: () {
+                  // Ако е създаден нов локален файл в тази сесия, но бележката се отхвърля - трием го
+                  if (_sessionFileCreated && _imagePath != null && _isLocalCopy == 1) {
+                    try {
+                      File(_imagePath!).deleteSync();
+                    } catch (e) {
+                      debugPrint("Грешка при чистене на отхвърлен файл: $e");
+                    }
+                  }
+                  Navigator.pop(context, true);
+                },
+                child: const Text('Отхвърли', style: TextStyle(color: Colors.red)),
+              ),
+            ],
+          ),
+        ) ?? false;
+
+        if (shouldPop && context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
       backgroundColor: _selectedColor,
       appBar: AppBar(
         backgroundColor: _selectedColor,
@@ -425,7 +468,19 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                 decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), color: Colors.black12),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(12),
-                                  child: Image.file(File(_imagePath!), fit: BoxFit.contain),
+                                  child: Image.file(
+                                    File(_imagePath!), 
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (context, error, stackTrace) => const Center(
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.broken_image, size: 40, color: Colors.grey),
+                                          Text("Файлът не е намерен", style: TextStyle(color: Colors.grey)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
                               if (_isEditing)
@@ -482,6 +537,18 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                             if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
                           },
                           style: const TextStyle(fontSize: 18),
+                        ),
+                      if (_isEditing && _imagePath != null && _isLocalCopy == 0)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: SwitchListTile(
+                            title: const Text("Копирай в паметта на приложението", style: TextStyle(fontSize: 14)),
+                            subtitle: const Text("Гарантира, че снимката няма да изчезне, ако бъде изтрита от галерията", style: TextStyle(fontSize: 11)),
+                            value: _shouldCopyLocally,
+                            onChanged: (val) => setState(() => _shouldCopyLocally = val),
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
                         ),
                     ],
                   ),
@@ -610,7 +677,11 @@ class FullScreenImage extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(backgroundColor: Colors.black, foregroundColor: Colors.white, title: Text(title)),
-      body: Center(child: InteractiveViewer(child: Image.file(File(imagePath), fit: BoxFit.contain))),
+      body: Center(child: InteractiveViewer(child: Image.file(
+        File(imagePath), 
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, size: 100, color: Colors.white24),
+      ))),
     );
   }
 }
