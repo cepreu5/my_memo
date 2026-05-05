@@ -9,6 +9,7 @@ import 'package:flutter_linkify/flutter_linkify.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import 'color_picker_helper.dart';
 
 class NoteFormScreen extends StatefulWidget {
   final Map<String, dynamic>? item;
@@ -89,6 +90,9 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       _isEditing = true;
       await _loadDefaultColor();
     }
+    if (!_noteColors.contains(_selectedColor)) {
+      _noteColors.add(_selectedColor);
+    }
     if (mounted) setState(() {});
   }
 
@@ -99,6 +103,9 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       setState(() {
         _selectedColor = Color(defaultColorVal);
       });
+    }
+    if (!_noteColors.contains(_selectedColor)) {
+      _noteColors.add(_selectedColor);
     }
   }
 
@@ -475,16 +482,6 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
           // Плаващо меню (FlyMenu)
           FlyMenu(
             actions: [
-              if (_isEditing) FlyAction(
-                icon: Icons.save, 
-                onTap: _save,
-                label: "Запази"
-              ),
-              if (!_isEditing) FlyAction(
-                icon: Icons.edit, 
-                onTap: () => setState(() => _isEditing = true),
-                label: "Редактирай"
-              ),
               if (widget.item?['id'] != null) FlyAction(
                 icon: Icons.delete, 
                 onTap: () async {
@@ -499,6 +496,16 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                 icon: Icons.arrow_back, 
                 onTap: () => Navigator.pop(context),
                 label: "Назад"
+              ),
+              if (_isEditing) FlyAction(
+                icon: Icons.save, 
+                onTap: _save,
+                label: "Запази"
+              ),
+              if (!_isEditing) FlyAction(
+                icon: Icons.edit, 
+                onTap: () => setState(() => _isEditing = true),
+                label: "Редактирай"
               ),
             ],
           ),
@@ -520,19 +527,44 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
-              children: _noteColors.map((color) {
-                return GestureDetector(
-                  onTap: () => setState(() => _selectedColor = color),
+              children: [
+                ..._noteColors.map((color) {
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedColor = color),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 6),
+                      width: 30, height: 30,
+                      decoration: BoxDecoration(
+                        color: color, shape: BoxShape.circle,
+                        border: Border.all(color: _selectedColor == color ? Colors.blue : Colors.black26, width: _selectedColor == color ? 2 : 1),
+                      ),
+                    ),
+                  );
+                }),
+                GestureDetector(
+                  onTap: () async {
+                    final picked = await showCustomColorPicker(context, _selectedColor);
+                    if (picked != null) {
+                      setState(() {
+                        if (!_noteColors.contains(picked)) {
+                          _noteColors.add(picked);
+                        }
+                        _selectedColor = picked;
+                      });
+                    }
+                  },
                   child: Container(
                     margin: const EdgeInsets.symmetric(horizontal: 6),
                     width: 30, height: 30,
-                    decoration: BoxDecoration(
-                      color: color, shape: BoxShape.circle,
-                      border: Border.all(color: _selectedColor == color ? Colors.blue : Colors.black26, width: _selectedColor == color ? 2 : 1),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 2)],
                     ),
+                    child: const Icon(Icons.colorize, size: 16, color: Colors.blue),
                   ),
-                );
-              }).toList(),
+                ),
+              ],
             ),
           ),
           

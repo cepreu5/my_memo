@@ -45,9 +45,12 @@ class _MainListScreenState extends State<MainListScreen> {
   Set<String> _allExistingTags = {};
   List<String> _selectedFilterTags = [];
 
-  bool _isGridView = false;
+  bool _isGridView = true;
   int _appBackgroundColor = Colors.white.toARGB32();
   bool _filterMatchAll = false; // Декларирана променлива за режима на филтриране
+  bool _confirmDelete = false;
+  int _maxLinesList = 5;
+  int _maxLinesGrid = 5;
   final TextEditingController _searchController = TextEditingController();
   late StreamSubscription _intentDataStreamSubscription;
 
@@ -71,6 +74,10 @@ class _MainListScreenState extends State<MainListScreen> {
     setState(() {
       _appBackgroundColor = prefs.getInt('bg_color') ?? Colors.white.toARGB32();
       _filterMatchAll = prefs.getBool('filter_match_all') ?? false;
+      _maxLinesList = prefs.getInt('max_lines_list') ?? 5;
+      _maxLinesGrid = prefs.getInt('max_lines_grid') ?? 5;
+      _confirmDelete = prefs.getBool('confirm_delete') ?? false;
+      _isGridView = prefs.getBool('is_grid_view') ?? true;
     });
   }
 
@@ -208,6 +215,14 @@ class _MainListScreenState extends State<MainListScreen> {
     if (mounted) _loadSettings();
   }
 
+  Future<void> _toggleView() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _isGridView = !_isGridView;
+      prefs.setBool('is_grid_view', _isGridView);
+    });
+  }
+
   Future<void> _toggleComplete(Map<String, dynamic> item) async {
     final newStatus = item['isCompleted'] == 1 ? 0 : 1;
     await dbHelper.updateItem({
@@ -234,6 +249,15 @@ class _MainListScreenState extends State<MainListScreen> {
             decoration: InputDecoration(
               hintText: 'Търсене...',
               prefixIcon: const Icon(Icons.search),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear, size: 20),
+                      onPressed: () {
+                        _searchController.clear();
+                        _filterItems('');
+                      },
+                    )
+                  : null,
               filled: true,
               fillColor: Colors.black.withValues(alpha: 0.05),
               border: OutlineInputBorder(
@@ -251,7 +275,7 @@ class _MainListScreenState extends State<MainListScreen> {
           ),
           IconButton(
             icon: Icon(_isGridView ? Icons.view_list : Icons.grid_view),
-            onPressed: () => setState(() => _isGridView = !_isGridView),
+            onPressed: _toggleView,
           ),
         ],
       ),
@@ -279,9 +303,9 @@ class _MainListScreenState extends State<MainListScreen> {
           FlyMenu(
             actions: [
               FlyAction(
-                icon: Icons.add, 
-                onTap: () => _openNoteForm(),
-                label: "Нова бележка"
+                icon: _isGridView ? Icons.view_list : Icons.grid_view,
+                onTap: _toggleView,
+                label: "Изглед"
               ),
               FlyAction(
                 icon: Icons.settings, 
@@ -289,9 +313,9 @@ class _MainListScreenState extends State<MainListScreen> {
                 label: "Настройки"
               ),
               FlyAction(
-                icon: _isGridView ? Icons.view_list : Icons.grid_view,
-                onTap: () => setState(() => _isGridView = !_isGridView),
-                label: "Изглед"
+                icon: Icons.add, 
+                onTap: () => _openNoteForm(),
+                label: "Нова бележка"
               ),
             ],
           ),
@@ -385,7 +409,7 @@ class _MainListScreenState extends State<MainListScreen> {
           const SizedBox(height: 4),
           Text(
             item['content'] ?? '',
-            maxLines: isGrid ? 15 : 5, 
+            maxLines: isGrid ? _maxLinesGrid : _maxLinesList, 
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: 13,
@@ -421,12 +445,14 @@ class _MainListScreenState extends State<MainListScreen> {
       content = Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.all(8.0),
+          Container(
+            width: 100,
+            alignment: Alignment.topCenter,
+            margin: const EdgeInsets.fromLTRB(10, 10, 0, 10),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 100, maxHeight: 100),
+                constraints: const BoxConstraints(maxHeight: 100, maxWidth: 100),
                 child: Image.file(File(item['imagePath']), fit: BoxFit.cover),
               ),
             ),
@@ -440,7 +466,14 @@ class _MainListScreenState extends State<MainListScreen> {
         children: [
           ClipRRect(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-            child: Image.file(File(item['imagePath']), fit: BoxFit.cover, width: double.infinity),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 200),
+              child: Container(
+                width: double.infinity,
+                alignment: Alignment.topCenter,
+                child: Image.file(File(item['imagePath']), fit: BoxFit.contain),
+              ),
+            ),
           ),
           content,
         ],
@@ -458,6 +491,26 @@ class _MainListScreenState extends State<MainListScreen> {
           padding: const EdgeInsets.only(left: 20),
           child: const Icon(Icons.delete, color: Colors.white),
         ),
+        confirmDismiss: (direction) async {
+          if (!_confirmDelete) return true;
+          return await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Потвърждение'),
+              content: const Text('Сигурни ли сте, че искате да изтриете тази бележка?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Отказ'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Изтриване', style: TextStyle(color: Colors.red)),
+                ),
+              ],
+            ),
+          ) ?? false;
+        },
         onDismissed: (direction) async {
           await dbHelper.deleteItem(item['id']);
           _refreshItems();

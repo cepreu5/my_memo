@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class FlyAction {
   final IconData icon;
@@ -21,7 +22,7 @@ class FlyMenu extends StatefulWidget {
 class _FlyMenuState extends State<FlyMenu> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   bool _isOpen = false;
-  Offset _position = const Offset(300, 600);
+  Offset buttonPosition = const Offset(300, 400);
 
   @override
   void initState() {
@@ -30,6 +31,31 @@ class _FlyMenuState extends State<FlyMenu> with SingleTickerProviderStateMixin {
       vsync: this,
       duration: const Duration(milliseconds: 250),
     );
+    _loadButtonPosition(); // Зарежда позицията при инициализация
+  }
+
+  Future<void> _loadButtonPosition() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      buttonPosition = Offset(
+        prefs.getDouble('buttonX') ?? 300.0, // Default стойности
+        prefs.getDouble('buttonY') ?? 400.0,
+      );
+    });
+  }
+
+  Future<void> _saveButtonPosition(Offset newPosition) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('buttonX', newPosition.dx);
+    await prefs.setDouble('buttonY', newPosition.dy);
+  }
+
+  void _onPanUpdate(DragUpdateDetails details) {
+    final newPosition = buttonPosition + details.delta;
+    _saveButtonPosition(newPosition); // Запазва новата позиция
+    setState(() {
+      buttonPosition = newPosition;
+    });
   }
 
   void _toggle() {
@@ -48,12 +74,12 @@ class _FlyMenuState extends State<FlyMenu> with SingleTickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    bool isLeft = _position.dx < size.width / 2;
+    bool isLeft = buttonPosition.dx < size.width / 2;
 
     // Дефинираме голяма интерактивна зона (250x250), за да не излизат бутоните от нея 
     return Positioned(
-      left: _position.dx - 125,
-      top: _position.dy - 125,
+      left: buttonPosition.dx - 125,
+      top: buttonPosition.dy - 125,
       child: SizedBox(
         width: 250,
         height: 250,
@@ -70,28 +96,31 @@ class _FlyMenuState extends State<FlyMenu> with SingleTickerProviderStateMixin {
             // Главен бутон (Център на 250x250 зоната)
             GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onPanUpdate: (details) {
-                if (!_isOpen) {
-                  setState(() {
-                    _position += details.delta;
-                  });
-                }
-              },
+              onPanUpdate: _onPanUpdate,
+              // onPanEnd(details) {
+              //   if (!_isOpen) {
+              //     setState(() {
+              //       buttonPosition += details.delta;
+              //     });
+              //   }
+              // },
               onTap: _toggle,
               child: Container(
                 width: 56,
                 height: 56,
-                decoration: const BoxDecoration(
-                  color: Colors.deepPurple,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.deepPurple.withValues(alpha: 0.5),
                   shape: BoxShape.circle,
-                  boxShadow: [
+                  boxShadow: const [
                     BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 4))
                   ],
                 ),
-                child: AnimatedRotation(
-                  duration: const Duration(milliseconds: 250),
-                  turns: _isOpen ? 0.125 : 0,
-                  child: const Icon(Icons.add, color: Colors.white, size: 28),
+                child: AnimatedIcon(
+                  icon: AnimatedIcons.menu_close,
+                  progress: _controller,
+                  color: Colors.white,
+                  size: 28,
                 ),
               ),
             ),
