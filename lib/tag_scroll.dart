@@ -28,6 +28,12 @@ class TagScrollFilter extends StatelessWidget {
     return Container(
       height: 40, // Компактна височина
       padding: const EdgeInsets.symmetric(vertical: 4),
+      decoration: const BoxDecoration(
+        border: Border(
+          top: BorderSide(color: Colors.black12, width: 0.5),
+          bottom: BorderSide(color: Colors.black12, width: 0.5),
+        ),
+      ),
       child: Row(
         children: [
           // Икона, която става бутон за нулиране при наличие на селекция
@@ -55,7 +61,7 @@ class TagScrollFilter extends StatelessWidget {
                     visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     padding: EdgeInsets.zero,
-                    labelPadding: const EdgeInsets.symmetric(horizontal: 2.0), // @ padding между текста и ръба на чипа
+                    labelPadding: const EdgeInsets.symmetric(horizontal: 3.0), // @@ padding между текста и ръба на чипа
                     label: Text(
                       tag, 
                       style: TextStyle(
@@ -75,7 +81,7 @@ class TagScrollFilter extends StatelessWidget {
                       onSelectionChanged(newList);
                     },
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4), // @ закръгляне на ъглите
+                      borderRadius: BorderRadius.circular(8), // @@ закръгляне на ъглите
                     ),
                     showCheckmark: false,
                     selectedColor: Colors.blueAccent,

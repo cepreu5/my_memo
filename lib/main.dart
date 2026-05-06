@@ -4,13 +4,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:io';
 
+import 'package:cross_platform_video_thumbnails/cross_platform_video_thumbnails.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 import 'db_helper.dart';
 import 'note_form.dart';
 import 'settings_screen.dart';
 import 'tag_scroll.dart';
+import 'package:flutter_linkify/flutter_linkify.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
 import 'fly_menu.dart'; 
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await CrossPlatformVideoThumbnails.initialize();
   runApp(const BusinessOrganizerApp());
 }
 
@@ -88,41 +96,85 @@ class _MainListScreenState extends State<MainListScreen> {
     super.dispose();
   }
 
-  void _handleSharedMedia(List<SharedMediaFile> media) {
+  Future<void> _handleSharedMedia(List<SharedMediaFile> media) async {
     final sharedFile = media.first;
+    print("DEBUG: Shared Type: ${sharedFile.type}, Path: ${sharedFile.path}");
     if (sharedFile.type == SharedMediaType.text || sharedFile.type == SharedMediaType.url) {
-      _handleSharedText(sharedFile.path);
+      await _handleSharedText(sharedFile.path);
     } else if (sharedFile.type == SharedMediaType.video) {
+      String? thumbnailPath;
+      try {
+        final appDir = await getApplicationDocumentsDirectory();
+        final fileName = 'vid_thumb_${DateTime.now().millisecondsSinceEpoch}.png';
+        final targetPath = p.join(appDir.path, fileName);
+
+        // Уверяваме се, че директорията съществува
+        final directory = Directory(appDir.path);
+        if (!await directory.exists()) await directory.create(recursive: true);
+        final thumbnail = await CrossPlatformVideoThumbnails.generateThumbnail(
+          sharedFile.path,
+          const ThumbnailOptions(
+            timePosition: 1.0, width: 320, height: 240,
+            quality: 0.8, format: ThumbnailFormat.png,
+          ),
+        );
+        await File(targetPath).writeAsBytes(thumbnail.data);
+        thumbnailPath = targetPath;
+      } catch (e) {
+        debugPrint("Error generating video thumbnail: $e");
+      }
       _openNoteForm(initialData: {
         'title': 'Споделено видео',
         'content': 'Видео файл: ${sharedFile.path}',
-        'id': null,
-        'color': null,
-        'isCompleted': 0,
-        'tags': null,
+        'imagePath': thumbnailPath,
+        'id': null, 'color': null, 'isCompleted': 0, 'tags': null,
       });
     } else {
       _openNoteForm(initialData: {
         'imagePath': sharedFile.path,
         'title': 'Споделено изображение',
         'content': '',
-        'id': null,
-        'color': null,
-        'isCompleted': 0,
-        'tags': null,
+        'id': null, 'color': null, 'isCompleted': 0, 'tags': null,
       });
     }
   }
 
-  void _handleSharedText(String text) {
+  String? _extractYoutubeId(String url) {
+    final regExp = RegExp(
+      r'(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|shorts\/|.*[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})',
+      caseSensitive: false,
+    );
+    final match = regExp.firstMatch(url);
+    return match?.group(1);
+  }
+
+  Future<void> _handleSharedText(String text) async {
     if (text.isEmpty) return;
+    print("DEBUG: Получен текст за споделяне: '$text'");
+    String? youtubeId = _extractYoutubeId(text);
+    print("DEBUG: Извлечено YouTube ID: '$youtubeId'");
+    String? thumbPath;
+    String title = 'Споделен текст';
+    if (youtubeId != null) {
+      title = 'YouTube Видео';
+      try {
+        final response = await http.get(Uri.parse('https://img.youtube.com/vi/$youtubeId/0.jpg'));
+        print("DEBUG: YouTube Thumbnail статус: ${response.statusCode}");
+        if (response.statusCode == 200) {
+          final appDir = await getApplicationDocumentsDirectory();
+          thumbPath = p.join(appDir.path, 'yt_thumb_$youtubeId.jpg');
+          await File(thumbPath).writeAsBytes(response.bodyBytes);
+          print("DEBUG: Thumbnail записан в: $thumbPath");
+        }
+      } catch (e) {
+        print("DEBUG: Грешка при теглене на thumbnail: $e");
+      }
+    }
     _openNoteForm(initialData: {
       'content': text,
-      'title': 'Споделен текст',
-      'id': null,
-      'color': null,
-      'isCompleted': 0,
-      'tags': null,
+      'title': title,
+      'imagePath': thumbPath,
+      'id': null, 'color': null, 'isCompleted': 0, 'tags': null,
     });
   }
 
@@ -416,15 +468,22 @@ class _MainListScreenState extends State<MainListScreen> {
             ],
           ),
           const SizedBox(height: 4),
-          Text(
-            item['content'] ?? '',
-            maxLines: isGrid ? _maxLinesGrid : _maxLinesList, 
+          Linkify(
+            text: item['content'] ?? '',
+            onOpen: (link) async {
+              final url = Uri.parse(link.url);
+              if (await canLaunchUrl(url)) {
+                await launchUrl(url, mode: LaunchMode.externalApplication);
+              }
+            },
+            maxLines: (item['content'] != null && (item['content'].contains('http://') || item['content'].contains('https://') || item['content'].contains('www.'))) ? 1 : (isGrid ? _maxLinesGrid : _maxLinesList), 
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: 13,
               color: Colors.black87,
               decoration: isDone ? TextDecoration.lineThrough : null,
             ),
+            linkStyle: const TextStyle(color: Colors.blue, decoration: TextDecoration.none),
           ),
           if (item['reminderTime'] != null)
             Padding(
@@ -450,7 +509,9 @@ class _MainListScreenState extends State<MainListScreen> {
       ),
     );
 
-    if (!isGrid && item['imagePath'] != null) {
+    final String? displayImagePath = item['imagePath'] ?? item['videoThumbnailPath'];
+
+    if (!isGrid && displayImagePath != null) {
       content = Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -462,10 +523,17 @@ class _MainListScreenState extends State<MainListScreen> {
               borderRadius: BorderRadius.circular(8),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 100, maxWidth: 100),
-                child: Image.file(
-                  File(item['imagePath']), 
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, color: Colors.grey),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Image.file(
+                      File(displayImagePath), 
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, color: Colors.grey),
+                    ),
+                    if (item['videoThumbnailPath'] != null)
+                      const Icon(Icons.play_circle_fill, size: 30, color: Colors.white70),
+                  ],
                 ),
               ),
             ),
@@ -473,22 +541,27 @@ class _MainListScreenState extends State<MainListScreen> {
           Expanded(child: content),
         ],
       );
-    } else if (isGrid && item['imagePath'] != null) {
+    } else if (isGrid && displayImagePath != null) {
       content = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ClipRRect(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 200),
-              child: Container(
-                width: double.infinity,
-                alignment: Alignment.topCenter,
-                child: Image.file(
-                  File(item['imagePath']), 
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) => const Padding(padding: EdgeInsets.all(20), child: Icon(Icons.broken_image, color: Colors.grey)),
-                ),
+            child: Container(
+              width: double.infinity,
+              height: 200,
+              color: item['color'] != null ? Color(item['color']) : Colors.white,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Image.file(
+                    File(displayImagePath), 
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, color: Colors.grey),
+                  ),
+                  if (item['videoThumbnailPath'] != null)
+                    const Icon(Icons.play_circle_fill, size: 60, color: Colors.white70),
+                ],
               ),
             ),
           ),
@@ -539,6 +612,16 @@ class _MainListScreenState extends State<MainListScreen> {
               if (await file.exists()) {
                 await file.delete();
               }
+            } catch (e) {
+              debugPrint("Грешка при изтриване на локален файл: $e");
+            }
+          }
+          // Проверка дали бележката има миниатюра на видео и я изтриваме
+          final String? videoThumbnailPath = item['videoThumbnailPath'];
+          if (videoThumbnailPath != null) {
+            try {
+              final file = File(videoThumbnailPath);
+              if (await file.exists()) await file.delete();
             } catch (e) {
               debugPrint("Грешка при изтриване на локален файл: $e");
             }

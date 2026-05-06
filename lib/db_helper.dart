@@ -39,7 +39,8 @@ class DatabaseHelper {
         color INTEGER,
         isCompleted INTEGER DEFAULT 0,
         isLocalCopy INTEGER DEFAULT 0,
-        tags TEXT
+        tags TEXT,
+        videoThumbnailPath TEXT
       )
     ''');
   }

@@ -33,6 +33,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   final _tagController = TextEditingController(); // За добавяне на нов етикет в модала
   
   String? _imagePath;
+  String? _videoThumbnailPath; // Добавено за път към миниатюра на видео
   DateTime? _reminderTime;
   Color _selectedColor = Colors.white;
   int _isLocalCopy = 0; 
@@ -64,6 +65,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       _titleController.text = widget.item!['title']?.toString() ?? "";
       _contentController.text = widget.item!['content']?.toString() ?? "";
       _imagePath = widget.item!['imagePath'];
+      _videoThumbnailPath = widget.item!['videoThumbnailPath']; // Зареждане на пътя към миниатюрата
       _isLocalCopy = widget.item!['isLocalCopy'] ?? 0;
 
       // Ако е нова бележка (напр. от споделяне) и имаме изображение, което още не е локално копие,
@@ -239,9 +241,9 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
             _imagePath = croppedPath;
             _shouldCopyLocally = true;
           } else {
-            // Ако изрязването е отказано, ползваме оригиналния път от галерията и НЕ копираме файла първоначално
-            _imagePath = pickedFile.path;
-            _shouldCopyLocally = false;
+            // Ако изрязването е отказано, пак предлагаме локално копиране, защото при изключване, 
+            _imagePath = pickedFile.path; // снимката се записва в кеш и в базата се дава път към кеша, който може да бъде изтрит от системата
+            _shouldCopyLocally = true;
           }
           _isLocalCopy = 0;
         });
@@ -347,6 +349,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       'title': _titleController.text.trim(),
       'content': _contentController.text.trim(),
       'imagePath': finalPath,
+      'videoThumbnailPath': _videoThumbnailPath, // Записване на пътя към миниатюрата
       'reminderTime': _reminderTime?.toIso8601String(),
       'color': _selectedColor.toARGB32(),
       'isCompleted': widget.item?['isCompleted'] ?? 0,
@@ -372,8 +375,34 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     }
   }
 
-  void _openFullScreenImage() {
+  String? _extractYoutubeId(String url) {
+    final regExp = RegExp(
+      r'(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|shorts\/|.*[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})',
+      caseSensitive: false,
+    );
+    final match = regExp.firstMatch(url);
+    return match?.group(1);
+  }
+
+  Future<void> _deleteNote() async {
+    if (widget.item?['id'] == null) return;
+    final navigator = Navigator.of(context);
+    await dbHelper.deleteItem(widget.item!['id']);
+    widget.onSaved();
+    if (mounted) navigator.pop();
+  }
+
+  void _openFullScreenImage() async {
     if (_imagePath == null) return;
+    String? youtubeId = _extractYoutubeId(_contentController.text);
+    if (youtubeId != null) {
+      final url = Uri.parse(_contentController.text.trim());
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+        return;
+      }
+    }
+    if (!mounted) return;
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -421,6 +450,14 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                       debugPrint("Грешка при чистене на отхвърлен файл: $e");
                     }
                   }
+                  // Ако е създадена миниатюра на видео за нова бележка и се отхвърля - трием я
+                  if (widget.item?['id'] == null && _videoThumbnailPath != null) {
+                    try {
+                      File(_videoThumbnailPath!).deleteSync();
+                    } catch (e) {
+                      debugPrint("Грешка при чистене на отхвърлена миниатюра: $e");
+                    }
+                  }
                   Navigator.pop(context, true);
                 },
                 child: const Text('Отхвърли', style: TextStyle(color: Colors.red)),
@@ -440,6 +477,29 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
         elevation: 0,
         title: Text(_isEditing ? (widget.item?['id'] == null ? 'Нова бележка' : 'Редактиране') : 'Преглед'),
         actions: [
+          if (widget.item?['id'] != null)
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              onPressed: () async {
+                bool confirm = true;
+                final prefs = await SharedPreferences.getInstance();
+                if (!context.mounted) return;
+                if (prefs.getBool('confirm_delete') ?? true) {
+                  confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (innerContext) => AlertDialog(
+                      title: const Text('Изтриване'),
+                      content: const Text('Сигурни ли сте?'),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(innerContext, false), child: const Text('Отказ')),
+                        TextButton(onPressed: () => Navigator.pop(innerContext, true), child: const Text('Изтрий', style: TextStyle(color: Colors.red))),
+                      ],
+                    ),
+                  ) ?? false;
+                }
+                if (confirm && context.mounted) await _deleteNote();
+              },
+            ),
           if (!_isEditing)
             IconButton(icon: const Icon(Icons.edit), onPressed: () => setState(() => _isEditing = true))
           else
@@ -454,12 +514,13 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(16),
-                  child: Column(
+                  child: SelectionArea(
+                    child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (_imagePath != null)
+                      if (_imagePath != null || _videoThumbnailPath != null)
                         GestureDetector(
-                          onTap: _isEditing ? _editExistingImage : _openFullScreenImage,
+                          onTap: (_isEditing && _extractYoutubeId(_contentController.text) == null) ? _editExistingImage : _openFullScreenImage,
                           child: Stack(
                             children: [
                               Container(
@@ -468,22 +529,34 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                 decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), color: Colors.black12),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(12),
-                                  child: Image.file(
-                                    File(_imagePath!), 
-                                    fit: BoxFit.contain,
-                                    errorBuilder: (context, error, stackTrace) => const Center(
-                                      child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Icon(Icons.broken_image, size: 40, color: Colors.grey),
-                                          Text("Файлът не е намерен", style: TextStyle(color: Colors.grey)),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
+                                  child: _videoThumbnailPath != null
+                                      ? Stack(
+                                          alignment: Alignment.center,
+                                          children: [
+                                            Image.file(
+                                              File(_videoThumbnailPath!),
+                                              fit: BoxFit.contain,
+                                              errorBuilder: (context, error, stackTrace) => const Icon(Icons.videocam_off, size: 40, color: Colors.grey),
+                                            ),
+                                            const Icon(Icons.play_circle_fill, size: 60, color: Colors.white70),
+                                          ],
+                                        )
+                                      : Image.file(
+                                          File(_imagePath!), 
+                                          fit: BoxFit.contain,
+                                          errorBuilder: (context, error, stackTrace) => const Center(
+                                            child: Column(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Icon(Icons.broken_image, size: 40, color: Colors.grey),
+                                                Text("Файлът не е намерен", style: TextStyle(color: Colors.grey)),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
                                 ),
                               ),
-                              if (_isEditing)
+                              if (_isEditing && _imagePath != null)
                                 const Positioned(
                                   right: 8, bottom: 8,
                                   child: CircleAvatar(
@@ -499,6 +572,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                       if (_isEditing)
                         TextField(
                           controller: _titleController,
+                          maxLines: null,
                           style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                           decoration: const InputDecoration(hintText: 'Заглавие', border: InputBorder.none),
                         )
@@ -534,24 +608,48 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                           text: _contentController.text,
                           onOpen: (link) async {
                             final url = Uri.parse(link.url);
-                            if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
+                            if (await canLaunchUrl(url)) {
+                              await launchUrl(url, mode: LaunchMode.externalApplication);
+                            }
                           },
                           style: const TextStyle(fontSize: 18),
                         ),
-                      if (_isEditing && _imagePath != null && _isLocalCopy == 0)
+                      if (_isEditing && _imagePath != null && _isLocalCopy == 0 && _videoThumbnailPath == null)
                         Padding(
                           padding: const EdgeInsets.only(top: 10),
                           child: SwitchListTile(
-                            title: const Text("Копирай в паметта на приложението", style: TextStyle(fontSize: 14)),
-                            subtitle: const Text("Гарантира, че снимката няма да изчезне, ако бъде изтрита от галерията", style: TextStyle(fontSize: 11)),
+                            title: const Text("Копирай локално", style: TextStyle(fontSize: 14)),
+                            subtitle: const Text("Запазва снимката, дори да бъде изтрита от галерията", style: TextStyle(fontSize: 11)),
                             value: _shouldCopyLocally,
-                            onChanged: (val) => setState(() => _shouldCopyLocally = val),
+                            onChanged: (val) async {
+                              if (val == false) {
+                                final bool confirm = await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text('Внимание'),
+                                    content: const Text(
+                                        'Ако изключите локалното копиране, приложението ще разчита на временен файл в кеша на приложението. Ако системата или потребителят изчисти кеша, той ще изчезне и от тази бележка.'),
+                                    actions: [
+                                      TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отказ')),
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context, true),
+                                        child: const Text('Разбрах, изключи', style: TextStyle(color: Colors.red)),
+                                      ),
+                                    ],
+                                  ),
+                                ) ?? false;
+                                if (confirm) setState(() => _shouldCopyLocally = false);
+                              } else {
+                                setState(() => _shouldCopyLocally = true);
+                              }
+                            },
                             dense: true,
                             contentPadding: EdgeInsets.zero,
                           ),
                         ),
                     ],
                   ),
+                ),
                 ),
               ),
               if (_isEditing) _buildBottomTools(reminderText),
@@ -563,12 +661,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
             actions: [
               if (widget.item?['id'] != null) FlyAction(
                 icon: Icons.delete, 
-                onTap: () async {
-                  final navigator = Navigator.of(context);
-                  await dbHelper.deleteItem(widget.item!['id']);
-                  widget.onSaved();
-                  if (mounted) navigator.pop();
-                },
+                onTap: _deleteNote,
                 label: "Изтрий"
               ),
               FlyAction(
@@ -590,6 +683,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
           ),
         ],
       ),
+    ),
     );
   }
 

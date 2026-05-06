@@ -36,10 +36,12 @@ class _FlyMenuState extends State<FlyMenu> with SingleTickerProviderStateMixin {
 
   Future<void> _loadButtonPosition() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    final size = MediaQuery.of(context).size;
     setState(() {
       buttonPosition = Offset(
-        prefs.getDouble('buttonX') ?? 300.0, // Default стойности
-        prefs.getDouble('buttonY') ?? 400.0,
+        prefs.getDouble('buttonX') ?? (size.width - 80.0),
+        prefs.getDouble('buttonY') ?? (size.height / 2),
       );
     });
   }
@@ -51,11 +53,14 @@ class _FlyMenuState extends State<FlyMenu> with SingleTickerProviderStateMixin {
   }
 
   void _onPanUpdate(DragUpdateDetails details) {
-    final newPosition = buttonPosition + details.delta;
-    _saveButtonPosition(newPosition); // Запазва новата позиция
+    final size = MediaQuery.of(context).size;
     setState(() {
-      buttonPosition = newPosition;
+      buttonPosition = Offset(
+        (buttonPosition.dx + details.delta.dx).clamp(30.0, size.width - 30.0),
+        (buttonPosition.dy + details.delta.dy).clamp(30.0, size.height - 30.0),
+      );
     });
+    _saveButtonPosition(buttonPosition);
   }
 
   void _toggle() {
@@ -74,12 +79,13 @@ class _FlyMenuState extends State<FlyMenu> with SingleTickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    bool isLeft = buttonPosition.dx < size.width / 2;
-
-    // Дефинираме голяма интерактивна зона (250x250), за да не излизат бутоните от нея 
+    // Автоматично коригираме позицията, ако е извън екрана (напр. заради клавиатура)
+    double safeX = buttonPosition.dx.clamp(30.0, size.width - 30.0);
+    double safeY = buttonPosition.dy.clamp(30.0, size.height - 30.0);
+    bool isLeft = safeX < size.width / 2;
     return Positioned(
-      left: buttonPosition.dx - 125,
-      top: buttonPosition.dy - 125,
+      left: safeX - 125,
+      top: safeY - 125,
       child: SizedBox(
         width: 250,
         height: 250,

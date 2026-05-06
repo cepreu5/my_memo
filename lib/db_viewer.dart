@@ -55,10 +55,13 @@ class _DbViewerScreenState extends State<DbViewerScreen> {
                 final int id = record['id'];
                 final String? imagePath = record['imagePath'];
                 final bool isLocal = record['isLocalCopy'] == 1;
+                final String? videoThumbnailPath = record['videoThumbnailPath'];
 
                 String contentText = 'Сигурни ли сте, че искате да изтриете този запис?';
                 if (isLocal && imagePath != null) {
                   contentText += '\n\nВнимание: Локалното копие на файла (${imagePath.split('/').last}) също ще бъде изтрито от паметта на приложението.';
+                } else if (videoThumbnailPath != null) {
+                  contentText += '\n\nВнимание: Миниатюрата на видеото (${videoThumbnailPath.split('/').last}) също ще бъде изтрита от паметта на приложението.';
                 }
 
                 final bool confirm = await showDialog<bool>(
@@ -81,6 +84,15 @@ class _DbViewerScreenState extends State<DbViewerScreen> {
                   if (isLocal && imagePath != null) {
                     try {
                       final file = File(imagePath);
+                      if (await file.exists()) await file.delete();
+                    } catch (e) {
+                      debugPrint("Грешка при изтриване на файл: $e");
+                    }
+                  }
+                  // Изтриваме и миниатюрата на видеото, ако има такава
+                  if (videoThumbnailPath != null) {
+                    try {
+                      final file = File(videoThumbnailPath);
                       if (await file.exists()) await file.delete();
                     } catch (e) {
                       debugPrint("Грешка при изтриване на файл: $e");
@@ -113,7 +125,7 @@ class _DbViewerScreenState extends State<DbViewerScreen> {
                         style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                     ),
-                    if (_records[_currentIndex]['imagePath'] != null)
+                    if (_records[_currentIndex]['imagePath'] != null || _records[_currentIndex]['videoThumbnailPath'] != null)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 8.0),
                         child: Container(
@@ -121,9 +133,16 @@ class _DbViewerScreenState extends State<DbViewerScreen> {
                           decoration: BoxDecoration(
                             border: Border.all(color: Colors.grey),
                           ),
-                          child: Image.file(
-                            File(_records[_currentIndex]['imagePath']),
-                            errorBuilder: (context, error, stackTrace) => const Center(child: Text("Файлът не е намерен")),
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Image.file(
+                                File(_records[_currentIndex]['imagePath'] ?? _records[_currentIndex]['videoThumbnailPath']),
+                                errorBuilder: (context, error, stackTrace) => const Center(child: Text("Файлът не е намерен")),
+                              ),
+                              if (_records[_currentIndex]['videoThumbnailPath'] != null)
+                                const Icon(Icons.play_circle_fill, size: 60, color: Colors.white70),
+                            ],
                           ),
                         ),
                       ),

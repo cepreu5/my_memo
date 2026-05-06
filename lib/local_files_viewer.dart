@@ -27,7 +27,7 @@ class _LocalFilesViewerScreenState extends State<LocalFilesViewerScreen> {
     // Филтрираме само файлове, които са изображения (img_...)
     final List<File> imageFiles = entities
         .whereType<File>()
-        .where((file) => file.path.contains('img_'))
+        .where((file) => file.path.contains('img_') || file.path.contains('vid_thumb_')) // Включваме и миниатюри на видео
         .toList();
 
     setState(() {
@@ -74,7 +74,15 @@ class _LocalFilesViewerScreenState extends State<LocalFilesViewerScreen> {
                   children: [
                     Padding(
                       padding: const EdgeInsets.all(16.0),
-                      child: Text('Файл ${_currentIndex + 1} от ${_files.length}\n${_files[_currentIndex].path.split('/').last}'),
+                      child: FutureBuilder<int>(
+                        future: _files[_currentIndex].length(),
+                        builder: (context, snapshot) {
+                          final size = snapshot.hasData 
+                              ? '${(snapshot.data! / 1024).toStringAsFixed(2)} KB' 
+                              : '...';
+                          return Text('Файл ${_currentIndex + 1} от ${_files.length}\n${_files[_currentIndex].path.split('/').last}\nРазмер: $size');
+                        },
+                      ),
                     ),
                     Expanded(
                       child: InteractiveViewer(
