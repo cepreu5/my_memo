@@ -37,8 +37,13 @@ class _FlyMenuState extends State<FlyMenu> with SingleTickerProviderStateMixin {
   }
 
   void _showOverlay() {
-    if (_overlayEntry != null) return;
-    _overlayEntry = OverlayEntry(builder: (context) => _buildMenu(context));
+    if (!mounted || _overlayEntry != null) return;
+    _overlayEntry = OverlayEntry(builder: (context) {
+      // Проверяваме дали маршрутът все още е активен (най-отгоре)
+      final route = ModalRoute.of(this.context);
+      if (route == null || !route.isCurrent) return const SizedBox.shrink();
+      return _buildMenu(context);
+    });
     Overlay.of(context).insert(_overlayEntry!);
   }
 
@@ -77,7 +82,11 @@ class _FlyMenuState extends State<FlyMenu> with SingleTickerProviderStateMixin {
   }
 
   @override
-  Widget build(BuildContext context) => const SizedBox.shrink();
+  Widget build(BuildContext context) {
+    // Предизвикваме обновяване на Overlay, когато маршрутът се промени (напр. се върнем назад)
+    WidgetsBinding.instance.addPostFrameCallback((_) => _overlayEntry?.markNeedsBuild());
+    return const SizedBox.shrink();
+  }
 
   Widget _buildMenu(BuildContext context) {
     final size = MediaQuery.of(context).size;
@@ -86,10 +95,8 @@ class _FlyMenuState extends State<FlyMenu> with SingleTickerProviderStateMixin {
     bool isLeft = safeX < size.width / 2;
     return Stack(
       children: [
-        // Под-бутони
         if (_isOpen || !_controller.isDismissed)
           ...List.generate(widget.actions.length, (index) => _buildAnimatedChild(index, isLeft, safeX, safeY)),
-        // Главен бутон
         Positioned(
           left: safeX - 28,
           top: safeY - 28,
@@ -127,7 +134,7 @@ class _FlyMenuState extends State<FlyMenu> with SingleTickerProviderStateMixin {
         double x = cos(currentAngle) * dist;
         double y = sin(currentAngle) * dist;
         return Positioned(
-          left: centerX + x - 70, // 70 е половин ширина на Row с лейбъл
+          left: centerX + x - 70,
           top: centerY + y - 22,
           child: Material(
             color: Colors.transparent,
