@@ -47,6 +47,8 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     const Color(0xFFF8BBD0),
     const Color(0xFFE1BEE7),
   ];
+  Color get _textColor => _selectedColor.computeLuminance() > 0.5 ? Colors.black87 : Colors.white;
+  Color get _secondaryTextColor => _selectedColor.computeLuminance() > 0.5 ? Colors.black54 : Colors.white70;
 
   @override
   void initState() {
@@ -397,12 +399,14 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       child: Scaffold(
         backgroundColor: _selectedColor,
         appBar: AppBar(
-          backgroundColor: _selectedColor, elevation: 0,
-          title: Text(_isEditing ? (widget.item?['id'] == null ? 'Нова бележка' : 'Редактиране') : 'Преглед'),
+          backgroundColor: _selectedColor,
+          elevation: 0,
+          foregroundColor: _textColor,
+          title: Text(_isEditing ? (widget.item?['id'] == null ? 'Нова бележка' : 'Редактиране') : 'Преглед', style: TextStyle(color: _textColor)),
           actions: [
-            if (widget.item?['id'] != null) IconButton(icon: const Icon(Icons.delete_outline), onPressed: _deleteNote),
-            if (!_isEditing) IconButton(icon: const Icon(Icons.edit), onPressed: () => setState(() => _isEditing = true))
-            else IconButton(icon: const Icon(Icons.save), onPressed: _save),
+            if (widget.item?['id'] != null) IconButton(icon: const Icon(Icons.delete_outline), color: _textColor, onPressed: _deleteNote),
+            if (!_isEditing) IconButton(icon: const Icon(Icons.edit), color: _textColor, onPressed: () => setState(() => _isEditing = true))
+            else IconButton(icon: const Icon(Icons.save), color: _textColor, onPressed: _save),
           ],
         ),
         body: Stack(
@@ -445,21 +449,24 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                               ),
                             const SizedBox(height: 16),
                             if (_isEditing)
-                              TextField(controller: _titleController, maxLines: null, style: TextStyle(fontSize: _fontSizeTitle, fontWeight: FontWeight.bold), decoration: const InputDecoration(hintText: 'Заглавие', border: InputBorder.none))
+                              TextField(controller: _titleController, maxLines: null, style: TextStyle(fontSize: _fontSizeTitle, fontWeight: FontWeight.bold, color: _textColor), decoration: InputDecoration(hintText: 'Заглавие', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor)))
                             else if (_titleController.text.isNotEmpty)
-                              Text(_titleController.text, style: TextStyle(fontSize: _fontSizeTitle, fontWeight: FontWeight.bold)),
+                              Text(_titleController.text, style: TextStyle(fontSize: _fontSizeTitle, fontWeight: FontWeight.bold, color: _textColor)),
                             if (_selectedTags.isNotEmpty)
                               Padding(
                                 padding: const EdgeInsets.symmetric(vertical: 8.0),
                                 child: Wrap(spacing: 6, runSpacing: 0, children: _selectedTags.map((tag) => Chip(
-                                  label: Text(tag, style: const TextStyle(fontSize: 12)),
+                                  label: Text(tag, style: TextStyle(fontSize: 12, color: _textColor)),
+                                  backgroundColor: _textColor.withValues(alpha: 0.1),
+                                  side: BorderSide(color: _textColor.withValues(alpha: 0.2)),
                                   padding: EdgeInsets.zero, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                   onDeleted: _isEditing ? () => setState(() => _selectedTags.remove(tag)) : null,
+                                  deleteIconColor: _textColor,
                                 )).toList()),
                               ),
                             const SizedBox(height: 12),
                             if (_isEditing)
-                              TextField(controller: _contentController, focusNode: _contentFocusNode, maxLines: null, style: TextStyle(fontSize: _fontSizeContent), decoration: const InputDecoration(hintText: 'Съдържание...', border: InputBorder.none), onSubmitted: (v) => _save())
+                              TextField(controller: _contentController, focusNode: _contentFocusNode, maxLines: null, style: TextStyle(fontSize: _fontSizeContent, color: _textColor), decoration: InputDecoration(hintText: 'Съдържание...', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor)), onSubmitted: (v) => _save())
                             else
                               Linkify(
                                 text: _contentController.text,
@@ -467,15 +474,17 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                   final url = Uri.parse(link.url);
                                   if (await canLaunchUrl(url)) { await launchUrl(url, mode: LaunchMode.externalApplication); }
                                 },
-                                style: TextStyle(fontSize: _fontSizeContent),
+                                style: TextStyle(fontSize: _fontSizeContent, color: _textColor),
+                                linkStyle: TextStyle(color: _textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue),
                               ),
                             if (_isEditing && _imagePath != null && _isLocalCopy == 0 && _videoThumbnailPath == null)
                               Padding(
                                 padding: const EdgeInsets.only(top: 10),
                                 child: SwitchListTile(
-                                  title: const Text("Копирай локално", style: TextStyle(fontSize: 14)),
-                                  subtitle: const Text("Запазва снимката, дори да бъде изтрита от галерията", style: TextStyle(fontSize: 11)),
+                                  title: Text("Копирай локално", style: TextStyle(fontSize: 14, color: _textColor)),
+                                  subtitle: Text("Запазва снимката, дори да бъде изтрита от галерията", style: TextStyle(fontSize: 11, color: _secondaryTextColor)),
                                   value: _shouldCopyLocally,
+                                  activeColor: Colors.blue,
                                   onChanged: (val) async {
                                     if (val == false) {
                                       final bool confirm = await showDialog<bool>(context: context, builder: (c) => AlertDialog(

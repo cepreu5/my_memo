@@ -35,6 +35,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     const Color(0xFFF8BBD0), const Color(0xFFE1BEE7), const Color(0xFFD7CCC8), Colors.black,
   ];
 
+  Color get _textColor => Color(_appBgColor).computeLuminance() > 0.5 ? Colors.black87 : Colors.white;
+  Color get _secondaryTextColor => Color(_appBgColor).computeLuminance() > 0.5 ? Colors.black54 : Colors.white70;
+
   @override
   void initState() {
     super.initState();
@@ -98,7 +101,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       backgroundColor: Color(_appBgColor),
       appBar: AppBar(
         backgroundColor: Color(_appBgColor),
-        title: const Text('Настройки'),
+        foregroundColor: _textColor,
+        title: Text('Настройки', style: TextStyle(color: _textColor)),
         automaticallyImplyLeading: false,
         actions: [
           IconButton(icon: const Icon(Icons.close, color: Colors.red), onPressed: _revertAndExit, tooltip: 'Отказ'),
@@ -113,11 +117,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _buildSectionTitle('Фон на приложението'),
               const SizedBox(height: 10),
               _buildColorPicker(selectedColor: _appBgColor, onColorSelected: (color) => setState(() => _appBgColor = color.toARGB32())),
-              const Divider(height: 30),
+              Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
               _buildSectionTitle('Фон на бележките'),
               const SizedBox(height: 10),
               _buildColorPicker(selectedColor: _defaultNoteColor, onColorSelected: (color) => setState(() => _defaultNoteColor = color.toARGB32())),
-              const Divider(height: 30),
+              Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
               _buildSectionTitle('Текст и оформление'),
               _buildNumberInput(title: 'Редове в списък', controller: _listLinesController, min: 1, max: 20, onChanged: (val) => setState(() => _maxLinesList = val)),
               _buildNumberInput(title: 'Редове в матрица', controller: _gridLinesController, min: 1, max: 20, onChanged: (val) => setState(() => _maxLinesGrid = val)),
@@ -126,15 +130,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _buildNumberInput(title: 'Шрифт текст (списък)', controller: _listContentSizeController, min: 8, max: 25, onChanged: (val) => setState(() => _fontSizeListContent = val.toDouble())),
               _buildNumberInput(title: 'Шрифт заглавие (редактор)', controller: _formTitleSizeController, min: 14, max: 40, onChanged: (val) => setState(() => _fontSizeFormTitle = val.toDouble())),
               _buildNumberInput(title: 'Шрифт текст (редактор)', controller: _formContentSizeController, min: 10, max: 35, onChanged: (val) => setState(() => _fontSizeFormContent = val.toDouble())),
-              const Divider(height: 30),
+              Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
               _buildSectionTitle('Филтриране по етикети'),
-              SwitchListTile(title: Text(_filterMatchAll ? 'ВСИЧКИ избрани' : 'ПОНЕ ЕДИН от избраните'), value: _filterMatchAll, onChanged: (val) => setState(() => _filterMatchAll = val)),
-              const Divider(height: 30),
+              SwitchListTile(title: Text(_filterMatchAll ? 'ВСИЧКИ избрани' : 'ПОНЕ ЕДИН от избраните', style: TextStyle(color: _textColor, fontSize: 14)), value: _filterMatchAll, activeColor: Colors.blue, onChanged: (val) => setState(() => _filterMatchAll = val)),
+              Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
               _buildSectionTitle('Потвърждение при изтриване'),
-              SwitchListTile(title: Text(_confirmDelete ? 'Включено' : 'Изключено'), value: _confirmDelete, onChanged: (val) => setState(() => _confirmDelete = val)),
-              const Divider(height: 30),
-              ListTile(leading: const Icon(Icons.storage, size: 20), title: const Text('База данни'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DbViewerScreen()))),
-              ListTile(leading: const Icon(Icons.folder_open, size: 20), title: const Text('Файлове'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LocalFilesViewerScreen()))),
+              SwitchListTile(title: Text(_confirmDelete ? 'Включено' : 'Изключено', style: TextStyle(color: _textColor, fontSize: 14)), value: _confirmDelete, activeColor: Colors.blue, onChanged: (val) => setState(() => _confirmDelete = val)),
+              Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
+              ListTile(leading: Icon(Icons.storage, size: 20, color: _textColor), title: Text('База данни', style: TextStyle(color: _textColor)), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DbViewerScreen()))),
+              ListTile(leading: Icon(Icons.folder_open, size: 20, color: _textColor), title: Text('Файлове', style: TextStyle(color: _textColor)), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LocalFilesViewerScreen()))),
               const SizedBox(height: 80),
             ],
           ),
@@ -155,18 +159,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(title, style: const TextStyle(fontSize: 13)),
+          Text(title, style: TextStyle(fontSize: 13, color: _textColor)),
           SizedBox(
             width: 50,
             child: TextField(
               controller: controller,
               keyboardType: TextInputType.number,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: _textColor),
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               decoration: InputDecoration(
                 isDense: true, contentPadding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: _secondaryTextColor.withValues(alpha: 0.3))),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Colors.blue)),
               ),
               onChanged: (val) {
                 int? parsed = int.tryParse(val);
@@ -179,7 +184,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildSectionTitle(String title) => Padding(padding: const EdgeInsets.only(bottom: 8), child: Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.blueGrey)));
+  Widget _buildSectionTitle(String title) => Padding(padding: const EdgeInsets.only(bottom: 8), child: Text(title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(_appBgColor).computeLuminance() > 0.5 ? Colors.blueGrey : Colors.blueAccent)));
 
   Widget _buildColorPicker({required int selectedColor, required Function(Color) onColorSelected}) {
     return Wrap(
@@ -193,7 +198,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               width: 38, height: 38,
               decoration: BoxDecoration(
                 color: color, shape: BoxShape.circle,
-                border: Border.all(color: isSelected ? Colors.blue : Colors.black12, width: isSelected ? 2 : 1),
+                border: Border.all(color: isSelected ? Colors.blue : (_textColor.withValues(alpha: 0.2)), width: isSelected ? 2 : 1),
               ),
               child: isSelected ? const Icon(Icons.check, color: Colors.blue, size: 20) : null,
             ),
@@ -209,11 +214,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           },
           child: Container(
             width: 38, height: 38,
-            decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 2)]),
+            decoration: BoxDecoration(color: isSelectedColorBright(selectedColor) ? Colors.white : Colors.grey[800], shape: BoxShape.circle, boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 2)]),
             child: const Icon(Icons.colorize, color: Colors.blue, size: 18),
           ),
         ),
       ],
     );
   }
+  bool isSelectedColorBright(int color) => Color(color).computeLuminance() > 0.5;
 }
