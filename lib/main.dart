@@ -59,6 +59,8 @@ class _MainListScreenState extends State<MainListScreen> {
   bool _confirmDelete = false;
   int _maxLinesList = 5;
   int _maxLinesGrid = 5;
+  double _fontSizeTitle = 14;
+  double _fontSizeContent = 13;
   final TextEditingController _searchController = TextEditingController();
   late StreamSubscription _intentDataStreamSubscription;
 
@@ -84,6 +86,8 @@ class _MainListScreenState extends State<MainListScreen> {
       _filterMatchAll = prefs.getBool('filter_match_all') ?? false;
       _maxLinesList = prefs.getInt('max_lines_list') ?? 5;
       _maxLinesGrid = prefs.getInt('max_lines_grid') ?? 5;
+      _fontSizeTitle = prefs.getDouble('list_title_size') ?? 14;
+      _fontSizeContent = prefs.getDouble('list_content_size') ?? 13;
       _confirmDelete = prefs.getBool('confirm_delete') ?? false;
       _isGridView = prefs.getBool('is_grid_view') ?? true;
     });
@@ -460,7 +464,7 @@ class _MainListScreenState extends State<MainListScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    fontSize: 14,
+                    fontSize: _fontSizeTitle,
                     decoration: isDone ? TextDecoration.lineThrough : null,
                   ),
                 ),
@@ -479,7 +483,7 @@ class _MainListScreenState extends State<MainListScreen> {
             maxLines: (item['content'] != null && (item['content'].contains('http://') || item['content'].contains('https://') || item['content'].contains('www.'))) ? 1 : (isGrid ? _maxLinesGrid : _maxLinesList), 
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 13,
+              fontSize: _fontSizeContent,
               color: Colors.black87,
               decoration: isDone ? TextDecoration.lineThrough : null,
             ),

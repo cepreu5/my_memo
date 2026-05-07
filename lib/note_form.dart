@@ -43,6 +43,8 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   
   final dbHelper = DatabaseHelper();
   bool _isEditing = false;
+  double _fontSizeTitle = 18;
+  double _fontSizeContent = 16;
 
   final List<Color> _noteColors = [
     Colors.white,
@@ -61,6 +63,11 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   }
 
   Future<void> _initializeData() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _fontSizeTitle = prefs.getDouble('form_title_size') ?? 18;
+      _fontSizeContent = prefs.getDouble('form_content_size') ?? 16;
+    });
     if (widget.item != null) {
       _titleController.text = widget.item!['title']?.toString() ?? "";
       _contentController.text = widget.item!['content']?.toString() ?? "";
@@ -573,11 +580,11 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                         TextField(
                           controller: _titleController,
                           maxLines: null,
-                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                          style: TextStyle(fontSize: _fontSizeTitle, fontWeight: FontWeight.bold),
                           decoration: const InputDecoration(hintText: 'Заглавие', border: InputBorder.none),
                         )
                       else if (_titleController.text.isNotEmpty)
-                        Text(_titleController.text, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                        Text(_titleController.text, style: TextStyle(fontSize: _fontSizeTitle, fontWeight: FontWeight.bold)),
                       
                       // Показване на етикетите
                       if (_selectedTags.isNotEmpty)
@@ -600,7 +607,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                         TextField(
                           controller: _contentController,
                           maxLines: null,
-                          style: const TextStyle(fontSize: 18),
+                          style: TextStyle(fontSize: _fontSizeContent),
                           decoration: const InputDecoration(hintText: 'Съдържание...', border: InputBorder.none),
                         )
                       else
@@ -612,7 +619,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                               await launchUrl(url, mode: LaunchMode.externalApplication);
                             }
                           },
-                          style: const TextStyle(fontSize: 18),
+                          style: TextStyle(fontSize: _fontSizeContent),
                         ),
                       if (_isEditing && _imagePath != null && _isLocalCopy == 0 && _videoThumbnailPath == null)
                         Padding(
