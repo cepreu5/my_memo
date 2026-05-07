@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:flutter/foundation.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
@@ -67,7 +68,7 @@ class DatabaseHelper {
     int? id = row['id'];
     // Проверка дали ID съществува, за да не се прави невалидна заявка
     if (id == null) {
-      print("Опит за обновяване без ID!");
+      debugPrint("Опит за обновяване без ID!");
       return 0;
     }
     return await db.update('notes', row, where: 'id = ?', whereArgs: [id]);

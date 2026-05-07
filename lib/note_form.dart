@@ -77,52 +77,25 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       _imagePath = widget.item!['imagePath'];
       _videoThumbnailPath = widget.item!['videoThumbnailPath'];
       _isLocalCopy = widget.item!['isLocalCopy'] ?? 0;
-      if (widget.item!['id'] == null && _imagePath != null && _isLocalCopy == 0) {
-        _shouldCopyLocally = true;
-      } else {
-        _shouldCopyLocally = _isLocalCopy == 1;
-      }
-      if (widget.item!['tags'] != null && widget.item!['tags'].toString().isNotEmpty) {
-        _selectedTags = widget.item!['tags'].toString().split(',').map((e) => e.trim()).toList();
-      }
-      if (widget.item!['reminderTime'] != null) {
-        try {
-          _reminderTime = DateTime.parse(widget.item!['reminderTime']);
-        } catch (e) { debugPrint("Грешка при дата: $e"); }
-      }
-      if (widget.item!['color'] != null) {
-        _selectedColor = Color(widget.item!['color']);
-      } else { await _loadDefaultColor(); }
+      if (widget.item!['id'] == null && _imagePath != null && _isLocalCopy == 0) { _shouldCopyLocally = true; } else { _shouldCopyLocally = _isLocalCopy == 1; }
+      if (widget.item!['tags'] != null && widget.item!['tags'].toString().isNotEmpty) { _selectedTags = widget.item!['tags'].toString().split(',').map((e) => e.trim()).toList(); }
+      if (widget.item!['reminderTime'] != null) { try { _reminderTime = DateTime.parse(widget.item!['reminderTime']); } catch (e) { debugPrint("Грешка дата: $e"); } }
+      if (widget.item!['color'] != null) { _selectedColor = Color(widget.item!['color']); } else { await _loadDefaultColor(); }
       _isEditing = widget.item!['id'] == null;
-    } else {
-      _isEditing = true;
-      await _loadDefaultColor();
-    }
+    } else { _isEditing = true; await _loadDefaultColor(); }
     if (!_noteColors.contains(_selectedColor)) { _noteColors.add(_selectedColor); }
     if (mounted) setState(() {});
   }
 
   void _deleteCurrentFileIfLocal() {
-    if (_isLocalCopy == 1 && _imagePath != null) {
-      try {
-        final f = File(_imagePath!);
-        if (f.existsSync()) f.deleteSync();
-      } catch (e) { debugPrint("Грешка при чистене на стар файл: $e"); }
-    }
-    if (_videoThumbnailPath != null) {
-      try {
-        final f = File(_videoThumbnailPath!);
-        if (f.existsSync()) f.deleteSync();
-      } catch (e) { debugPrint("Грешка при чистене на стара миниатюра: $e"); }
-    }
+    if (_isLocalCopy == 1 && _imagePath != null) { try { final f = File(_imagePath!); if (f.existsSync()) f.deleteSync(); } catch (e) { debugPrint("Грешка чистене файл: $e"); } }
+    if (_videoThumbnailPath != null) { try { final f = File(_videoThumbnailPath!); if (f.existsSync()) f.deleteSync(); } catch (e) { debugPrint("Грешка чистене миниатюра: $e"); } }
   }
 
   Future<void> _loadDefaultColor() async {
     final prefs = await SharedPreferences.getInstance();
     final defaultColorVal = prefs.getInt('default_note_color');
-    if (defaultColorVal != null) {
-      setState(() { _selectedColor = Color(defaultColorVal); });
-    }
+    if (defaultColorVal != null) { setState(() { _selectedColor = Color(defaultColorVal); }); }
     if (!_noteColors.contains(_selectedColor)) { _noteColors.add(_selectedColor); }
   }
 
@@ -278,7 +251,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       final String newPath = p.join(directory.path, fileName);
       await File(originalPath).copy(newPath);
       return newPath;
-    } catch (e) { debugPrint("Грешка при копиране: $e"); }
+    } catch (e) { debugPrint("Грешка копиране: $e"); }
     return null;
   }
 
@@ -287,9 +260,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     if (pickedDate != null) {
       if (!mounted) return;
       final TimeOfDay? pickedTime = await showTimePicker(context: context, initialTime: _reminderTime != null ? TimeOfDay.fromDateTime(_reminderTime!) : TimeOfDay.now());
-      if (pickedTime != null) {
-        setState(() { _reminderTime = DateTime(pickedDate.year, pickedDate.month, pickedDate.day, pickedTime.hour, pickedTime.minute); });
-      }
+      if (pickedTime != null) { setState(() { _reminderTime = DateTime(pickedDate.year, pickedDate.month, pickedDate.day, pickedTime.hour, pickedTime.minute); }); }
     }
   }
 
@@ -316,7 +287,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       else { data['id'] = widget.item!['id']; await dbHelper.updateItem(data); }
       widget.onSaved();
       if (mounted) Navigator.pop(context);
-    } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Грешка: $e'), backgroundColor: Colors.red)); }
+    } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Грешка запис: $e'), backgroundColor: Colors.red)); }
   }
 
   String? _extractYoutubeId(String url) {
@@ -344,18 +315,12 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       ) ?? false;
     }
     if (!confirm) return;
-    if (_isLocalCopy == 1 && _imagePath != null) {
-      final f = File(_imagePath!);
-      if (await f.exists()) await f.delete();
-    }
-    if (_videoThumbnailPath != null) {
-      final f = File(_videoThumbnailPath!);
-      if (await f.exists()) await f.delete();
-    }
+    if (_isLocalCopy == 1 && _imagePath != null) { try { final f = File(_imagePath!); if (await f.exists()) await f.delete(); } catch (e) { debugPrint("Грешка изтриване файл: $e"); } }
+    if (_videoThumbnailPath != null) { try { final f = File(_videoThumbnailPath!); if (await f.exists()) await f.delete(); } catch (e) { debugPrint("Грешка изтриване миниатюра: $e"); } }
     if (!mounted) return;
     await dbHelper.deleteItem(widget.item!['id']);
     widget.onSaved();
-    Navigator.of(context).pop();
+    if (mounted) Navigator.of(context).pop();
   }
 
   void _openFullScreenImage() async {
@@ -371,9 +336,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   @override
   Widget build(BuildContext context) {
     String reminderText = 'Напомняне';
-    if (_reminderTime != null) {
-      reminderText = '${_reminderTime!.day}.${_reminderTime!.month.toString().padLeft(2, '0')} ${_reminderTime!.hour}:${_reminderTime!.minute.toString().padLeft(2, '0')}';
-    }
+    if (_reminderTime != null) { reminderText = '${_reminderTime!.day}.${_reminderTime!.month.toString().padLeft(2, '0')} ${_reminderTime!.hour}:${_reminderTime!.minute.toString().padLeft(2, '0')}'; }
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
@@ -387,8 +350,8 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
             actions: [
               TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отказ')),
               TextButton(onPressed: () {
-                if (_sessionFileCreated && _imagePath != null && _isLocalCopy == 1) { try { File(_imagePath!).deleteSync(); } catch (e) {} }
-                if (widget.item?['id'] == null && _videoThumbnailPath != null) { try { File(_videoThumbnailPath!).deleteSync(); } catch (e) {} }
+                if (_sessionFileCreated && _imagePath != null && _isLocalCopy == 1) { try { File(_imagePath!).deleteSync(); } catch (e) { debugPrint("Грешка чистене при изход: $e"); } }
+                if (widget.item?['id'] == null && _videoThumbnailPath != null) { try { File(_videoThumbnailPath!).deleteSync(); } catch (e) { debugPrint("Грешка чистене миниатюра при изход: $e"); } }
                 Navigator.pop(context, true);
               }, child: const Text('Отхвърли', style: TextStyle(color: Colors.red))),
             ],
@@ -484,7 +447,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                   title: Text("Копирай локално", style: TextStyle(fontSize: 14, color: _textColor)),
                                   subtitle: Text("Запазва снимката, дори да бъде изтрита от галерията", style: TextStyle(fontSize: 11, color: _secondaryTextColor)),
                                   value: _shouldCopyLocally,
-                                  activeColor: Colors.blue,
+                                  activeThumbColor: Colors.blue,
                                   onChanged: (val) async {
                                     if (val == false) {
                                       final bool confirm = await showDialog<bool>(context: context, builder: (c) => AlertDialog(

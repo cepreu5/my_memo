@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 class TagScrollFilter extends StatelessWidget {
   final List<String> allTags;
   final List<String> selectedTags;
+  final Color textColor;
   final Function(List<String>) onSelectionChanged;
 
   const TagScrollFilter({
@@ -10,12 +11,12 @@ class TagScrollFilter extends StatelessWidget {
     required this.allTags,
     required this.selectedTags,
     required this.onSelectionChanged,
+    required this.textColor,
   });
 
   @override
   Widget build(BuildContext context) {
     if (allTags.isEmpty) return const SizedBox.shrink();
-    // Сортираме етикетите така, че избраните да са най-отпред
     final List<String> sortedTags = List.from(allTags);
     sortedTags.sort((a, b) {
       bool aSelected = selectedTags.contains(a);
@@ -25,27 +26,18 @@ class TagScrollFilter extends StatelessWidget {
       return a.compareTo(b);
     });
     final bool hasSelection = selectedTags.isNotEmpty;
+    final Color secondaryColor = textColor.withValues(alpha: 0.6);
     return Container(
-      height: 40, // Компактна височина
+      height: 40,
       padding: const EdgeInsets.symmetric(vertical: 4),
-      decoration: const BoxDecoration(
-        border: Border(
-          top: BorderSide(color: Colors.black12, width: 0.5),
-          bottom: BorderSide(color: Colors.black12, width: 0.5),
-        ),
-      ),
+      decoration: BoxDecoration(border: Border(top: BorderSide(color: textColor.withValues(alpha: 0.1), width: 0.5), bottom: BorderSide(color: textColor.withValues(alpha: 0.1), width: 0.5))),
       child: Row(
         children: [
-          // Икона, която става бутон за нулиране при наличие на селекция
           GestureDetector(
             onTap: hasSelection ? () => onSelectionChanged([]) : null,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10.0),
-              child: Icon(
-                hasSelection ? Icons.label_off_outlined : Icons.label_outline,
-                size: 20,
-                color: Colors.black54, // hasSelection ? Colors.redAccent : 
-              ),
+              child: Icon(hasSelection ? Icons.label_off_outlined : Icons.label_outline, size: 20, color: hasSelection ? Colors.redAccent : secondaryColor),
             ),
           ),
           Expanded(
@@ -61,32 +53,19 @@ class TagScrollFilter extends StatelessWidget {
                     visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     padding: EdgeInsets.zero,
-                    labelPadding: const EdgeInsets.symmetric(horizontal: 3.0), // @@ padding между текста и ръба на чипа
-                    label: Text(
-                      tag, 
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                        color: isSelected ? Colors.white : Colors.black87,
-                      ),
-                    ),
+                    labelPadding: const EdgeInsets.symmetric(horizontal: 3.0),
+                    label: Text(tag, style: TextStyle(fontSize: 10, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: isSelected ? Colors.white : textColor)),
                     selected: isSelected,
                     onSelected: (selected) {
                       List<String> newList = List.from(selectedTags);
-                      if (selected) {
-                        newList.add(tag);
-                      } else {
-                        newList.remove(tag);
-                      }
+                      if (selected) { newList.add(tag); } else { newList.remove(tag); }
                       onSelectionChanged(newList);
                     },
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8), // @@ закръгляне на ъглите
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     showCheckmark: false,
                     selectedColor: Colors.blueAccent,
-                    backgroundColor: Colors.black.withValues(alpha: 0.05),
-                    side: BorderSide.none,
+                    backgroundColor: textColor.withValues(alpha: 0.05),
+                    side: isSelected ? BorderSide.none : BorderSide(color: textColor.withValues(alpha: 0.1)),
                   ),
                 );
               },

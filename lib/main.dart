@@ -64,7 +64,7 @@ class _MainListScreenState extends State<MainListScreen> {
     _refreshItems();
     _intentDataStreamSubscription = ReceiveSharingIntent.instance.getMediaStream().listen((value) {
       if (value.isNotEmpty) _handleSharedMedia(value);
-    }, onError: (err) => debugPrint("Грешка: $err"));
+    }, onError: (err) => debugPrint("Грешка при споделяне: $err"));
     ReceiveSharingIntent.instance.getInitialMedia().then((value) {
       if (value.isNotEmpty) _handleSharedMedia(value);
     });
@@ -103,7 +103,7 @@ class _MainListScreenState extends State<MainListScreen> {
         final thumbnail = await CrossPlatformVideoThumbnails.generateThumbnail(sharedFile.path, const ThumbnailOptions(timePosition: 1.0, width: 320, height: 240, quality: 0.8, format: ThumbnailFormat.png));
         await File(targetPath).writeAsBytes(thumbnail.data);
         thumbnailPath = targetPath;
-      } catch (e) { debugPrint("Error generating video thumbnail: $e"); }
+      } catch (e) { debugPrint("Грешка при миниатюра: $e"); }
       _openNoteForm(initialData: { 'title': 'Споделено видео', 'content': 'Видео файл: ${sharedFile.path}', 'imagePath': thumbnailPath, 'id': null, 'color': null, 'isCompleted': 0, 'tags': null });
     } else {
       _openNoteForm(initialData: { 'imagePath': sharedFile.path, 'title': 'Споделено изображение', 'content': '', 'id': null, 'color': null, 'isCompleted': 0, 'tags': null });
@@ -130,7 +130,7 @@ class _MainListScreenState extends State<MainListScreen> {
           thumbPath = p.join(appDir.path, 'yt_thumb_$youtubeId.jpg');
           await File(thumbPath).writeAsBytes(response.bodyBytes);
         }
-      } catch (e) { debugPrint("Грешка при теглене на thumbnail: $e"); }
+      } catch (e) { debugPrint("Грешка при YouTube thumbnail: $e"); }
     }
     _openNoteForm(initialData: { 'content': text, 'title': title, 'imagePath': thumbPath, 'id': null, 'color': null, 'isCompleted': 0, 'tags': null });
   }
@@ -233,7 +233,7 @@ class _MainListScreenState extends State<MainListScreen> {
         children: [
           Column(
             children: [
-              TagScrollFilter(allTags: _allExistingTags.toList(), selectedTags: _selectedFilterTags, onSelectionChanged: (newList) { setState(() { _selectedFilterTags = newList; }); _filterItems(_searchController.text); }),
+              TagScrollFilter(allTags: _allExistingTags.toList(), selectedTags: _selectedFilterTags, textColor: appBarTextColor, onSelectionChanged: (newList) { setState(() { _selectedFilterTags = newList; }); _filterItems(_searchController.text); }),
               Expanded(
                 child: _filteredItems.isEmpty
                     ? Center(child: Text('Няма открити бележки.', style: TextStyle(color: appBarTextColor)))
@@ -359,8 +359,8 @@ class _MainListScreenState extends State<MainListScreen> {
           return await showDialog<bool>(context: context, builder: (c) => AlertDialog(title: const Text('Потвърждение'), content: const Text('Сигурни ли сте, че искате да изтриете тази бележка?'), actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Отказ')), TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Изтриване', style: TextStyle(color: Colors.red)))])) ?? false;
         },
         onDismissed: (direction) async {
-          if (item['isLocalCopy'] == 1 && item['imagePath'] != null) { try { final f = File(item['imagePath']); if (await f.exists()) await f.delete(); } catch (e) {} }
-          if (item['videoThumbnailPath'] != null) { try { final f = File(item['videoThumbnailPath']); if (await f.exists()) await f.delete(); } catch (e) {} }
+          if (item['isLocalCopy'] == 1 && item['imagePath'] != null) { try { final f = File(item['imagePath']); if (await f.exists()) await f.delete(); } catch (e) { debugPrint("Грешка файл: $e"); } }
+          if (item['videoThumbnailPath'] != null) { try { final f = File(item['videoThumbnailPath']); if (await f.exists()) await f.delete(); } catch (e) { debugPrint("Грешка миниатюра: $e"); } }
           await dbHelper.deleteItem(item['id']);
           _refreshItems();
         },
