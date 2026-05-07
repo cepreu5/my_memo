@@ -193,19 +193,21 @@ class _MainListScreenState extends State<MainListScreen> {
   }
 
   void _updateUniqueTags() {
-    final tagsSet = <String>{};
+    final Set<String> tagsSet = {};
     for (var item in _allItems) {
-      final String? tagsString = item['tags'];
-      if (tagsString != null && tagsString.isNotEmpty) {
-        final List<String> tagsList = tagsString.split(',');
+      final String rawTags = (item['tags'] ?? '').toString();
+      if (rawTags.isNotEmpty) {
+        final List<String> tagsList = rawTags.split(',');
         for (var tag in tagsList) {
           final trimmed = tag.trim();
           if (trimmed.isNotEmpty) tagsSet.add(trimmed);
         }
       }
     }
-    _allExistingTags = tagsSet;
-    _selectedFilterTags.removeWhere((tag) => !tagsSet.contains(tag));
+    setState(() {
+      _allExistingTags = tagsSet;
+      _selectedFilterTags.removeWhere((tag) => !tagsSet.contains(tag));
+    });
   }
 
   void _filterItems(String query) {
@@ -551,22 +553,10 @@ class _MainListScreenState extends State<MainListScreen> {
         children: [
           ClipRRect(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-            child: Container(
-              width: double.infinity,
-              height: 200,
-              color: item['color'] != null ? Color(item['color']) : Colors.white,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Image.file(
-                    File(displayImagePath), 
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, color: Colors.grey),
-                  ),
-                  if (item['videoThumbnailPath'] != null)
-                    const Icon(Icons.play_circle_fill, size: 60, color: Colors.white70),
-                ],
-              ),
+            child: NoteGridImage(
+              imagePath: displayImagePath,
+              videoThumbnailPath: item['videoThumbnailPath'],
+              backgroundColor: cardColor,
             ),
           ),
           content,
@@ -654,5 +644,66 @@ class _MainListScreenState extends State<MainListScreen> {
     } catch (e) {
       return '';
     }
+  }
+}
+
+class NoteGridImage extends StatefulWidget {
+  final String imagePath;
+  final String? videoThumbnailPath;
+  final Color backgroundColor;
+  const NoteGridImage({super.key, required this.imagePath, this.videoThumbnailPath, required this.backgroundColor});
+  @override
+  State<NoteGridImage> createState() => _NoteGridImageState();
+}
+
+class _NoteGridImageState extends State<NoteGridImage> {
+  bool _isPortrait = false;
+  @override
+  void initState() {
+    super.initState();
+    _checkDimensions();
+  }
+
+  void _checkDimensions() {
+    final image = FileImage(File(widget.imagePath));
+    image.resolve(const ImageConfiguration()).addListener(
+      ImageStreamListener((ImageInfo info, bool synchronousCall) {
+        if (mounted) {
+          setState(() {
+            _isPortrait = info.image.height > info.image.width;
+          });
+        }
+      }),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      color: widget.backgroundColor,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 200),
+        child: Stack(
+          alignment: Alignment.topCenter,
+          children: [
+            Padding(
+              padding: EdgeInsets.only(top: _isPortrait ? 3 : 0),
+              child: Image.file(
+                File(widget.imagePath), 
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, color: Colors.grey),
+              ),
+            ),
+            if (widget.videoThumbnailPath != null)
+              const Positioned.fill(
+                child: Center(
+                  child: Icon(Icons.play_circle_fill, size: 60, color: Colors.white70),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }

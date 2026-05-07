@@ -12,9 +12,7 @@ class FlyAction {
 class FlyMenu extends StatefulWidget {
   final List<FlyAction> actions;
   final bool showLabels;
-
   const FlyMenu({super.key, required this.actions, this.showLabels = false});
-
   @override
   State<FlyMenu> createState() => _FlyMenuState();
 }
@@ -22,45 +20,44 @@ class FlyMenu extends StatefulWidget {
 class _FlyMenuState extends State<FlyMenu> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   bool _isOpen = false;
-  Offset buttonPosition = const Offset(300, 400);
+  Offset _buttonPosition = const Offset(300, 400);
+  OverlayEntry? _overlayEntry;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 250),
-    );
-    _loadButtonPosition(); // Зарежда позицията при инициализация
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 250));
+    _loadAndShow();
   }
 
-  Future<void> _loadButtonPosition() async {
+  Future<void> _loadAndShow() async {
     final prefs = await SharedPreferences.getInstance();
-    if (!mounted) return;
-    final size = MediaQuery.of(context).size;
-    setState(() {
-      buttonPosition = Offset(
-        prefs.getDouble('buttonX') ?? (size.width - 80.0),
-        prefs.getDouble('buttonY') ?? (size.height / 2),
-      );
-    });
+    _buttonPosition = Offset(prefs.getDouble('buttonX') ?? 300, prefs.getDouble('buttonY') ?? 400);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _showOverlay());
   }
 
-  Future<void> _saveButtonPosition(Offset newPosition) async {
+  void _showOverlay() {
+    if (_overlayEntry != null) return;
+    _overlayEntry = OverlayEntry(builder: (context) => _buildMenu(context));
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  Future<void> _savePosition(Offset pos) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble('buttonX', newPosition.dx);
-    await prefs.setDouble('buttonY', newPosition.dy);
+    await prefs.setDouble('buttonX', pos.dx);
+    await prefs.setDouble('buttonY', pos.dy);
   }
 
   void _onPanUpdate(DragUpdateDetails details) {
     final size = MediaQuery.of(context).size;
     setState(() {
-      buttonPosition = Offset(
-        (buttonPosition.dx + details.delta.dx).clamp(30.0, size.width - 30.0),
-        (buttonPosition.dy + details.delta.dy).clamp(30.0, size.height - 30.0),
+      _buttonPosition = Offset(
+        (_buttonPosition.dx + details.delta.dx).clamp(30.0, size.width - 30.0),
+        (_buttonPosition.dy + details.delta.dy).clamp(30.0, size.height - 30.0),
       );
     });
-    _saveButtonPosition(buttonPosition);
+    _savePosition(_buttonPosition);
+    _overlayEntry?.markNeedsBuild();
   }
 
   void _toggle() {
@@ -68,126 +65,96 @@ class _FlyMenuState extends State<FlyMenu> with SingleTickerProviderStateMixin {
       _isOpen = !_isOpen;
       _isOpen ? _controller.forward() : _controller.reverse();
     });
+    _overlayEntry?.markNeedsBuild();
   }
 
   @override
   void dispose() {
     _controller.dispose();
+    _overlayEntry?.remove();
+    _overlayEntry = null;
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => const SizedBox.shrink();
+
+  Widget _buildMenu(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    // Автоматично коригираме позицията, ако е извън екрана (напр. заради клавиатура)
-    double safeX = buttonPosition.dx.clamp(30.0, size.width - 30.0);
-    double safeY = buttonPosition.dy.clamp(30.0, size.height - 30.0);
+    double safeX = _buttonPosition.dx.clamp(30.0, size.width - 30.0);
+    double safeY = _buttonPosition.dy.clamp(30.0, size.height - 30.0);
     bool isLeft = safeX < size.width / 2;
-    return Positioned(
-      left: safeX - 125,
-      top: safeY - 125,
-      child: SizedBox(
-        width: 250,
-        height: 250,
-        child: Stack(
-          alignment: Alignment.center,
-          clipBehavior: Clip.none,
-          children: [
-            // Под-бутони (Ветрило)
-            if (_isOpen || !_controller.isDismissed)
-              ...List.generate(widget.actions.length, (index) {
-                return _buildAnimatedChild(index, isLeft);
-              }),
-            
-            // Главен бутон (Център на 250x250 зоната)
-            GestureDetector(
+    return Stack(
+      children: [
+        // Под-бутони
+        if (_isOpen || !_controller.isDismissed)
+          ...List.generate(widget.actions.length, (index) => _buildAnimatedChild(index, isLeft, safeX, safeY)),
+        // Главен бутон
+        Positioned(
+          left: safeX - 28,
+          top: safeY - 28,
+          child: Material(
+            color: Colors.transparent,
+            child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onPanUpdate: _onPanUpdate,
-              // onPanEnd(details) {
-              //   if (!_isOpen) {
-              //     setState(() {
-              //       buttonPosition += details.delta;
-              //     });
-              //   }
-              // },
               onTap: _toggle,
               child: Container(
-                width: 56,
-                height: 56,
+                width: 56, height: 56,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: Colors.deepPurple.withValues(alpha: 0.5),
-                  shape: BoxShape.circle,
-                  boxShadow: const [
-                    BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 4))
-                  ],
+                  color: Colors.deepPurple.withValues(alpha: 0.5), shape: BoxShape.circle,
+                  boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 4))],
                 ),
-                child: AnimatedIcon(
-                  icon: AnimatedIcons.menu_close,
-                  progress: _controller,
-                  color: Colors.white,
-                  size: 28,
-                ),
+                child: AnimatedIcon(icon: AnimatedIcons.menu_close, progress: _controller, color: Colors.white, size: 28),
               ),
             ),
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 
-  Widget _buildAnimatedChild(int index, bool isLeft) {
+  Widget _buildAnimatedChild(int index, bool isLeft, double centerX, double centerY) {
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
-        // Ъгли за ветрило (Хоризонтално разпъване)
         double startAngle = isLeft ? -pi / 3 : 4 * pi / 3;
         double totalSweep = isLeft ? 2 * pi / 3 : -2 * pi / 3;
-        
-        double angleStep = widget.actions.length > 1 
-            ? totalSweep / (widget.actions.length - 1) 
-            : 0;
-        
-        double currentAngle = widget.actions.length > 1 
-            ? startAngle + (index * angleStep)
-            : (isLeft ? 0 : pi);
-
+        double angleStep = widget.actions.length > 1 ? totalSweep / (widget.actions.length - 1) : 0;
+        double currentAngle = widget.actions.length > 1 ? startAngle + (index * angleStep) : (isLeft ? 0 : pi);
         double dist = _controller.value * 100;
         double x = cos(currentAngle) * dist;
         double y = sin(currentAngle) * dist;
-
-        return Transform.translate(
-          offset: Offset(x, y),
-          child: Opacity(
-            opacity: _controller.value,
-            child: Transform.scale(
-              scale: 0.5 + (_controller.value * 0.5),
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque, // Спира клика да не минава под бутона
-                onTap: () {
-                  if (_isOpen) {
-                    _toggle();
-                    widget.actions[index].onTap();
-                  }
-                },
-                child: Padding(
-                  padding: const EdgeInsets.all(10.0), // По-голяма зона за докосване
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (widget.showLabels && !isLeft) _buildLabel(widget.actions[index].label),
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: Colors.deepPurple.shade400,
-                          shape: BoxShape.circle,
-                          boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
+        return Positioned(
+          left: centerX + x - 70, // 70 е половин ширина на Row с лейбъл
+          top: centerY + y - 22,
+          child: Material(
+            color: Colors.transparent,
+            child: Opacity(
+              opacity: _controller.value,
+              child: Transform.scale(
+                scale: 0.5 + (_controller.value * 0.5),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () { if (_isOpen) { _toggle(); widget.actions[index].onTap(); } },
+                  child: Padding(
+                    padding: const EdgeInsets.all(5.0),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (widget.showLabels && !isLeft) _buildLabel(widget.actions[index].label),
+                        Container(
+                          width: 44, height: 44,
+                          decoration: BoxDecoration(
+                            color: Colors.deepPurple.shade400, shape: BoxShape.circle,
+                            boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                          ),
+                          child: Icon(widget.actions[index].icon, color: Colors.white, size: 22),
                         ),
-                        child: Icon(widget.actions[index].icon, color: Colors.white, size: 22),
-                      ),
-                      if (widget.showLabels && isLeft) _buildLabel(widget.actions[index].label),
-                    ],
+                        if (widget.showLabels && isLeft) _buildLabel(widget.actions[index].label),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -198,18 +165,10 @@ class _FlyMenuState extends State<FlyMenu> with SingleTickerProviderStateMixin {
     );
   }
 
-  Widget _buildLabel(String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      margin: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        color: Colors.black87,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-      ),
-    );
-  }
+  Widget _buildLabel(String text) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    margin: const EdgeInsets.symmetric(horizontal: 8),
+    decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(4)),
+    child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+  );
 }

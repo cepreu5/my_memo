@@ -45,6 +45,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   bool _isEditing = false;
   double _fontSizeTitle = 18;
   double _fontSizeContent = 16;
+  final List<String> _newTagsInSession = []; // Следи новосъздадените етикети
 
   final List<Color> _noteColors = [
     Colors.white,
@@ -113,6 +114,21 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     if (mounted) setState(() {});
   }
 
+  void _deleteCurrentFileIfLocal() {
+    if (_isLocalCopy == 1 && _imagePath != null) {
+      try {
+        final f = File(_imagePath!);
+        if (f.existsSync()) f.deleteSync();
+      } catch (e) { debugPrint("Грешка при чистене на стар файл: $e"); }
+    }
+    if (_videoThumbnailPath != null) {
+      try {
+        final f = File(_videoThumbnailPath!);
+        if (f.existsSync()) f.deleteSync();
+      } catch (e) { debugPrint("Грешка при чистене на стара миниатюра: $e"); }
+    }
+  }
+
   Future<void> _loadDefaultColor() async {
     final prefs = await SharedPreferences.getInstance();
     final defaultColorVal = prefs.getInt('default_note_color');
@@ -134,6 +150,10 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final allAvailableTags = {
+              ...widget.existingTags,
+              ..._newTagsInSession,
+            }.toList();
             return Padding(
               padding: EdgeInsets.only(
                 bottom: MediaQuery.of(context).viewInsets.bottom,
@@ -146,12 +166,12 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                   const Text("Управление на етикети", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 15),
                   // Списък със съществуващи
-                  if (widget.existingTags.isNotEmpty) ...[
+                  if (allAvailableTags.isNotEmpty) ...[
                     const Text("Избери от съществуващи:", style: TextStyle(fontSize: 14, color: Colors.grey)),
                     const SizedBox(height: 10),
                     Wrap(
                       spacing: 8,
-                      children: widget.existingTags.map((tag) {
+                      children: allAvailableTags.map((tag) {
                         final isSelected = _selectedTags.contains(tag);
                         return FilterChip(
                           label: Text(tag),
@@ -177,8 +197,10 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                           decoration: const InputDecoration(hintText: "Име на етикет"),
                           onSubmitted: (val) {
                             if (val.trim().isNotEmpty) {
+                              String nt = val.trim();
                               setState(() {
-                                if (!_selectedTags.contains(val.trim())) _selectedTags.add(val.trim());
+                                if (!_selectedTags.contains(nt)) _selectedTags.add(nt);
+                                if (!widget.existingTags.contains(nt) && !_newTagsInSession.contains(nt)) _newTagsInSession.add(nt);
                                 _tagController.clear();
                               });
                               setModalState(() {});
@@ -193,6 +215,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                             setState(() {
                               String newTag = _tagController.text.trim();
                               if (!_selectedTags.contains(newTag)) _selectedTags.add(newTag);
+                              if (!widget.existingTags.contains(newTag) && !_newTagsInSession.contains(newTag)) _newTagsInSession.add(newTag);
                               _tagController.clear();
                             });
                             setModalState(() {});
@@ -240,21 +263,20 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     final picker = ImagePicker();
     try {
       final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-      if (pickedFile != null) {
-        final croppedPath = await _cropImage(pickedFile.path);
-        setState(() {
-          if (croppedPath != null) {
-            // Ако е изрязано, използваме новия временен файл и го маркираме за локално записване
-            _imagePath = croppedPath;
-            _shouldCopyLocally = true;
-          } else {
-            // Ако изрязването е отказано, пак предлагаме локално копиране, защото при изключване, 
-            _imagePath = pickedFile.path; // снимката се записва в кеш и в базата се дава път към кеша, който може да бъде изтрит от системата
-            _shouldCopyLocally = true;
-          }
-          _isLocalCopy = 0;
-        });
-      }
+        if (pickedFile != null) {
+          final croppedPath = await _cropImage(pickedFile.path);
+          setState(() {
+            _deleteCurrentFileIfLocal(); // Чистим старото, преди да сложим новото
+            if (croppedPath != null) {
+              _imagePath = croppedPath;
+              _shouldCopyLocally = true;
+            } else {
+              _imagePath = pickedFile.path;
+              _shouldCopyLocally = true;
+            }
+            _isLocalCopy = 0;
+          });
+        }
     } catch (e) {
       debugPrint("Грешка галерия: $e");
     }
@@ -270,6 +292,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
           final String? copiedPath = await _copyImageLocally(croppedPath);
           if (copiedPath != null) {
             setState(() {
+              _deleteCurrentFileIfLocal();
               _imagePath = copiedPath;
               _isLocalCopy = 1;
               _shouldCopyLocally = true;
@@ -288,6 +311,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     final croppedPath = await _cropImage(_imagePath!);
     if (croppedPath != null) {
       setState(() {
+        _deleteCurrentFileIfLocal();
         _imagePath = croppedPath;
         _isLocalCopy = 0;
         _shouldCopyLocally = true;
@@ -393,6 +417,16 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
 
   Future<void> _deleteNote() async {
     if (widget.item?['id'] == null) return;
+    // 1. Изтриваме физическите файлове, ползвайки текущото състояние
+    if (_isLocalCopy == 1 && _imagePath != null) {
+      final file = File(_imagePath!);
+      if (await file.exists()) await file.delete();
+    }
+    if (_videoThumbnailPath != null) {
+      final thumb = File(_videoThumbnailPath!);
+      if (await thumb.exists()) await thumb.delete();
+    }
+    // 2. Изтриваме записа от базата
     final navigator = Navigator.of(context);
     await dbHelper.deleteItem(widget.item!['id']);
     widget.onSaved();
