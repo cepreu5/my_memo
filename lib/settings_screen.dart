@@ -30,9 +30,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _formTitleSizeController = TextEditingController();
   final TextEditingController _formContentSizeController = TextEditingController();
   final List<Color> _availableColors = [
-    Colors.white, const Color(0xFFF5F5F5), const Color(0xFFFFF9C4), 
-    const Color(0xFFFFCCBC), const Color(0xFFC8E6C9), const Color(0xFFB3E5FC), 
-    const Color(0xFFF8BBD0), const Color(0xFFE1BEE7), const Color(0xFFD7CCC8), Colors.black,
+    Colors.white, const Color(0xFF0A1931), const Color(0xFFFF5E00), 
+    const Color(0xFFFFC93C), const Color(0xFF6A2C70), const Color(0xFFB83B5E), 
+    const Color(0xFF005082), Colors.black,
   ];
 
   Color get _textColor => Color(_appBgColor).computeLuminance() > 0.5 ? Colors.black87 : Colors.white;

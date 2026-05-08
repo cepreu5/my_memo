@@ -40,12 +40,12 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   final List<String> _newTagsInSession = [];
   final List<Color> _noteColors = [
     Colors.white,
-    const Color(0xFFFFF9C4),
-    const Color(0xFFFFCCBC),
-    const Color(0xFFC8E6C9),
-    const Color(0xFFB3E5FC),
-    const Color(0xFFF8BBD0),
-    const Color(0xFFE1BEE7),
+    const Color(0xFF0A1931),
+    const Color(0xFFFF5E00),
+    const Color(0xFFFFC93C),
+    const Color(0xFF6A2C70),
+    const Color(0xFFB83B5E),
+    const Color(0xFF005082),
   ];
   Color get _textColor => _selectedColor.computeLuminance() > 0.5 ? Colors.black87 : Colors.white;
   Color get _secondaryTextColor => _selectedColor.computeLuminance() > 0.5 ? Colors.black54 : Colors.white70;

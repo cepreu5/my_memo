@@ -26,7 +26,6 @@ class TagScrollFilter extends StatelessWidget {
       return a.compareTo(b);
     });
     final bool hasSelection = selectedTags.isNotEmpty;
-    final Color secondaryColor = textColor.withValues(alpha: 0.6);
     return Container(
       height: 40,
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -37,7 +36,7 @@ class TagScrollFilter extends StatelessWidget {
             onTap: hasSelection ? () => onSelectionChanged([]) : null,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10.0),
-              child: Icon(hasSelection ? Icons.label_off_outlined : Icons.label_outline, size: 20, color: hasSelection ? Colors.redAccent : secondaryColor),
+              child: Icon(hasSelection ? Icons.label_off_outlined : Icons.label_outline, size: 20, color: hasSelection ? Colors.redAccent : textColor.withValues(alpha: 0.6)),
             ),
           ),
           Expanded(
@@ -54,7 +53,7 @@ class TagScrollFilter extends StatelessWidget {
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     padding: EdgeInsets.zero,
                     labelPadding: const EdgeInsets.symmetric(horizontal: 3.0),
-                    label: Text(tag, style: TextStyle(fontSize: 10, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: isSelected ? Colors.white : textColor)),
+                    label: Text(tag, style: TextStyle(fontSize: 10, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: Colors.black)),
                     selected: isSelected,
                     onSelected: (selected) {
                       List<String> newList = List.from(selectedTags);
@@ -63,9 +62,9 @@ class TagScrollFilter extends StatelessWidget {
                     },
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     showCheckmark: false,
-                    selectedColor: Colors.blueAccent,
-                    backgroundColor: textColor.withValues(alpha: 0.05),
-                    side: isSelected ? BorderSide.none : BorderSide(color: textColor.withValues(alpha: 0.1)),
+                    selectedColor: Colors.yellow[700],
+                    backgroundColor: Colors.yellow[200],
+                    side: isSelected ? const BorderSide(color: Colors.orange, width: 1) : BorderSide(color: Colors.yellow[400]!),
                   ),
                 );
               },

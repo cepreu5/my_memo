@@ -13,11 +13,12 @@ import 'tag_scroll.dart';
 import 'package:flutter_linkify/flutter_linkify.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
-import 'fly_menu.dart'; 
+import 'fly_menu.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await CrossPlatformVideoThumbnails.initialize();
+void main() {
+  final binding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: binding);
   runApp(const BusinessOrganizerApp());
 }
 
@@ -47,7 +48,7 @@ class _MainListScreenState extends State<MainListScreen> {
   Set<String> _allExistingTags = {};
   List<String> _selectedFilterTags = [];
   bool _isGridView = true;
-  int _appBackgroundColor = Colors.white.toARGB32();
+  int _appBackgroundColor = const Color(0xFFFF5E00).toARGB32();
   bool _filterMatchAll = false;
   bool _confirmDelete = false;
   int _maxLinesList = 5;
@@ -56,24 +57,45 @@ class _MainListScreenState extends State<MainListScreen> {
   double _fontSizeContent = 13;
   final TextEditingController _searchController = TextEditingController();
   late StreamSubscription _intentDataStreamSubscription;
+  bool _isInitialized = false;
 
   @override
   void initState() {
     super.initState();
-    _loadSettings();
-    _refreshItems();
-    _intentDataStreamSubscription = ReceiveSharingIntent.instance.getMediaStream().listen((value) {
-      if (value.isNotEmpty) _handleSharedMedia(value);
-    }, onError: (err) => debugPrint("Грешка при споделяне: $err"));
-    ReceiveSharingIntent.instance.getInitialMedia().then((value) {
-      if (value.isNotEmpty) _handleSharedMedia(value);
-    });
+    _initializeApp();
+  }
+
+  Future<void> _initializeApp() async {
+    try {
+      await CrossPlatformVideoThumbnails.initialize();
+      await _loadSettings();
+      await _refreshItems();
+      
+      _intentDataStreamSubscription = ReceiveSharingIntent.instance.getMediaStream().listen((value) {
+        if (value.isNotEmpty) _handleSharedMedia(value);
+      }, onError: (err) => debugPrint("Грешка при споделяне: $err"));
+
+      // Изчакваме първия кадър, преди да проверим за споделяне, за да не "увисне"
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final initialMedia = await ReceiveSharingIntent.instance.getInitialMedia();
+        if (initialMedia.isNotEmpty) {
+          _handleSharedMedia(initialMedia);
+        }
+        if (mounted) setState(() { _isInitialized = true; });
+        FlutterNativeSplash.remove();
+      });
+    } catch (e) {
+      debugPrint("Грешка инициализация: $e");
+      if (mounted) setState(() { _isInitialized = true; });
+      FlutterNativeSplash.remove();
+    }
   }
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     setState(() {
-      _appBackgroundColor = prefs.getInt('bg_color') ?? Colors.white.toARGB32();
+      _appBackgroundColor = prefs.getInt('bg_color') ?? const Color(0xFFFF5E00).toARGB32();
       _filterMatchAll = prefs.getBool('filter_match_all') ?? false;
       _maxLinesList = prefs.getInt('max_lines_list') ?? 5;
       _maxLinesGrid = prefs.getInt('max_lines_grid') ?? 5;
@@ -92,6 +114,7 @@ class _MainListScreenState extends State<MainListScreen> {
   }
 
   Future<void> _handleSharedMedia(List<SharedMediaFile> media) async {
+    if (!mounted) return;
     final sharedFile = media.first;
     if (sharedFile.type == SharedMediaType.text || sharedFile.type == SharedMediaType.url) { await _handleSharedText(sharedFile.path); } 
     else if (sharedFile.type == SharedMediaType.video) {
@@ -136,9 +159,11 @@ class _MainListScreenState extends State<MainListScreen> {
   }
 
   Future<void> _refreshItems() async {
-    final data = await dbHelper.queryAllRows();
-    if (!mounted) return;
-    setState(() { _allItems = data; _updateUniqueTags(); _filterItems(_searchController.text); });
+    try {
+      final data = await dbHelper.queryAllRows();
+      if (!mounted) return;
+      setState(() { _allItems = data; _updateUniqueTags(); _filterItems(_searchController.text); });
+    } catch (e) { debugPrint("Грешка БД: $e"); }
   }
 
   void _updateUniqueTags() {
@@ -175,6 +200,7 @@ class _MainListScreenState extends State<MainListScreen> {
   }
 
   void _openNoteForm({Map<String, dynamic>? initialData}) async {
+    if (!mounted) return;
     await Navigator.push(context, MaterialPageRoute(builder: (c) => NoteFormScreen(item: initialData, onSaved: _refreshItems, existingTags: _allExistingTags.toList())));
     if (mounted) _refreshItems();
   }
@@ -197,6 +223,14 @@ class _MainListScreenState extends State<MainListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_isInitialized) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFFF5E00),
+        body: Center(
+          child: Image.asset('assets/app_icon.png', width: 200, fit: BoxFit.contain, errorBuilder: (c,e,s) => const SizedBox()),
+        ),
+      );
+    }
     final bgColor = Color(_appBackgroundColor);
     final isDarkBg = bgColor.computeLuminance() < 0.5;
     final appBarTextColor = isDarkBg ? Colors.white : Colors.black87;
@@ -284,6 +318,7 @@ class _MainListScreenState extends State<MainListScreen> {
     final Color cardColor = item['color'] != null ? Color(item['color']) : Colors.white;
     final Color textColor = cardColor.computeLuminance() > 0.5 ? Colors.black87 : Colors.white;
     final Color secondaryTextColor = cardColor.computeLuminance() > 0.5 ? Colors.black54 : Colors.white70;
+    final Color bottomColor = cardColor == Colors.white ? Colors.grey[100]! : HSLColor.fromColor(cardColor).withLightness((HSLColor.fromColor(cardColor).lightness - 0.1).clamp(0.0, 1.0)).toColor();
     Widget content = Padding(
       padding: const EdgeInsets.all(10.0),
       child: Column(
@@ -364,7 +399,17 @@ class _MainListScreenState extends State<MainListScreen> {
           await dbHelper.deleteItem(item['id']);
           _refreshItems();
         },
-        child: Card(margin: EdgeInsets.zero, color: cardColor, elevation: 2, child: InkWell(borderRadius: BorderRadius.circular(8), onTap: () => _openNoteForm(initialData: item), child: content)),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [cardColor, bottomColor]),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 4, offset: const Offset(0, 2))],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(borderRadius: BorderRadius.circular(8), onTap: () => _openNoteForm(initialData: item), child: content),
+          ),
+        ),
       ),
     );
   }
