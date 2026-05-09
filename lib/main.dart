@@ -66,21 +66,24 @@ class _MainListScreenState extends State<MainListScreen> {
 
   Future<void> _initializeApp() async {
     try {
-      await CrossPlatformVideoThumbnails.initialize();
-      await _loadSettings();
-      await _refreshItems();
-      
+      final initPromise = Future.wait([
+        CrossPlatformVideoThumbnails.initialize(),
+        _loadSettings(),
+      ]);
       _intentDataStreamSubscription = ReceiveSharingIntent.instance.getMediaStream().listen((value) {
         if (value.isNotEmpty) _handleSharedMedia(value);
       }, onError: (err) => debugPrint("Грешка при споделяне: $err"));
-
-      // Изчакваме първия кадър, преди да проверим за споделяне, за да не "увисне"
       WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await initPromise;
         final initialMedia = await ReceiveSharingIntent.instance.getInitialMedia();
         if (initialMedia.isNotEmpty) {
-          _handleSharedMedia(initialMedia);
+          await _handleSharedMedia(initialMedia);
+          FlutterNativeSplash.remove();
+          _refreshItems();
+        } else {
+          await _refreshItems();
+          FlutterNativeSplash.remove();
         }
-        FlutterNativeSplash.remove();
       });
     } catch (e) {
       debugPrint("Грешка инициализация: $e");
@@ -111,20 +114,11 @@ class _MainListScreenState extends State<MainListScreen> {
   }
 
   Future<void> _handleSharedMedia(List<SharedMediaFile> media) async {
-    if (!mounted) return;
+    if (!media.isNotEmpty) return;
     final sharedFile = media.first;
     if (sharedFile.type == SharedMediaType.text || sharedFile.type == SharedMediaType.url) { await _handleSharedText(sharedFile.path); } 
     else if (sharedFile.type == SharedMediaType.video) {
-      String? thumbnailPath;
-      try {
-        final appDir = await getApplicationDocumentsDirectory();
-        final fileName = 'vid_thumb_${DateTime.now().millisecondsSinceEpoch}.png';
-        final targetPath = p.join(appDir.path, fileName);
-        final thumbnail = await CrossPlatformVideoThumbnails.generateThumbnail(sharedFile.path, const ThumbnailOptions(timePosition: 1.0, width: 320, height: 240, quality: 0.8, format: ThumbnailFormat.png));
-        await File(targetPath).writeAsBytes(thumbnail.data);
-        thumbnailPath = targetPath;
-      } catch (e) { debugPrint("Грешка при миниатюра: $e"); }
-      _openNoteForm(initialData: { 'title': '', 'content': '🎬 ${sharedFile.path}', 'imagePath': thumbnailPath, 'id': null, 'color': null, 'isCompleted': 0, 'tags': null });
+      _openNoteForm(initialData: { 'title': '', 'content': '🎬 ${sharedFile.path}', 'imagePath': sharedFile.path, 'needsThumbnail': true, 'id': null, 'color': null, 'isCompleted': 0, 'tags': null });
     } else {
       _openNoteForm(initialData: { 'imagePath': sharedFile.path, 'title': '', 'content': '📷 ', 'id': null, 'color': null, 'isCompleted': 0, 'tags': null });
     }

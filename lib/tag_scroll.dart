@@ -64,7 +64,7 @@ class TagScrollFilter extends StatelessWidget {
                     showCheckmark: false,
                     selectedColor: Colors.yellow[700],
                     backgroundColor: Colors.cyan[200],
-                    side: isSelected ? const BorderSide(color: Colors.cyan, width: 1) : BorderSide(color: Colors.yellow[400]!),
+                    side: isSelected ? const BorderSide(color: Colors.cyan, width: 1) : BorderSide(color: Colors.cyan[400]!),
                   ),
                 );
               },
