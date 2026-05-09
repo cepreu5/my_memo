@@ -8,4 +8,5 @@ if (Test-Path "android\app\build\outputs\flutter-apk\app-debug.apk") {
 flutter build apk --debug
 
 # Инсталираме през adb (автоматично намира пътя, ако си в папката на проекта)
-adb install "android\app\build\outputs\flutter-apk\app-debug.apk"
+# adb install "android\app\build\outputs\flutter-apk\app-debug.apk"
+adb install "android\app\build\outputs\flutter-apk\app-release.apk"
