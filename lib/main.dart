@@ -66,24 +66,18 @@ class _MainListScreenState extends State<MainListScreen> {
 
   Future<void> _initializeApp() async {
     try {
-      final initPromise = Future.wait([
-        CrossPlatformVideoThumbnails.initialize(),
-        _loadSettings(),
-      ]);
+      await CrossPlatformVideoThumbnails.initialize();
+      await _loadSettings();
+      await _refreshItems();
       _intentDataStreamSubscription = ReceiveSharingIntent.instance.getMediaStream().listen((value) {
         if (value.isNotEmpty) _handleSharedMedia(value);
       }, onError: (err) => debugPrint("Грешка при споделяне: $err"));
       WidgetsBinding.instance.addPostFrameCallback((_) async {
-        await initPromise;
         final initialMedia = await ReceiveSharingIntent.instance.getInitialMedia();
         if (initialMedia.isNotEmpty) {
           await _handleSharedMedia(initialMedia);
-          FlutterNativeSplash.remove();
-          _refreshItems();
-        } else {
-          await _refreshItems();
-          FlutterNativeSplash.remove();
         }
+        FlutterNativeSplash.remove();
       });
     } catch (e) {
       debugPrint("Грешка инициализация: $e");

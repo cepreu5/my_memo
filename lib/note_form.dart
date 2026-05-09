@@ -10,7 +10,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'color_picker_helper.dart';
-import 'package:cross_platform_video_thumbnails/cross_platform_video_thumbnails.dart';
 
 class NoteFormScreen extends StatefulWidget {
   final Map<String, dynamic>? item;
@@ -27,7 +26,6 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   final _tagController = TextEditingController(); 
   final _contentFocusNode = FocusNode();
   String? _imagePath;
-  bool _isGeneratingThumbnail = false;
 
   DateTime? _reminderTime;
   Color _selectedColor = Colors.white;
@@ -83,10 +81,6 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       if (widget.item!['tags'] != null && widget.item!['tags'].toString().isNotEmpty) { _selectedTags = widget.item!['tags'].toString().split(',').map((e) => e.trim()).toList(); }
       if (widget.item!['reminderTime'] != null) { try { _reminderTime = DateTime.parse(widget.item!['reminderTime']); } catch (e) { debugPrint("Грешка дата: $e"); } }
       if (widget.item!['color'] != null) { _selectedColor = Color(widget.item!['color']); } else { await _loadDefaultColor(); }
-      if (widget.item!['needsThumbnail'] == true && _imagePath != null) {
-        _isGeneratingThumbnail = true;
-        _generateThumbnailFromVideo(_imagePath!);
-      }
       _isEditing = widget.item!['id'] == null;
     } else { _isEditing = true; await _loadDefaultColor(); }
     if (!_noteColors.contains(_selectedColor)) { _noteColors.add(_selectedColor); }
@@ -102,28 +96,6 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     final defaultColorVal = prefs.getInt('default_note_color');
     if (defaultColorVal != null) { setState(() { _selectedColor = Color(defaultColorVal); }); }
     if (!_noteColors.contains(_selectedColor)) { _noteColors.add(_selectedColor); }
-  }
-
-  Future<void> _generateThumbnailFromVideo(String videoPath) async {
-    try {
-      final appDir = await getApplicationDocumentsDirectory();
-      final fileName = 'vid_thumb_${DateTime.now().millisecondsSinceEpoch}.png';
-      final targetPath = p.join(appDir.path, fileName);
-      final thumbnail = await CrossPlatformVideoThumbnails.generateThumbnail(
-        videoPath,
-        const ThumbnailOptions(timePosition: 1.0, width: 320, height: 240, quality: 0.8, format: ThumbnailFormat.png),
-      );
-      await File(targetPath).writeAsBytes(thumbnail.data);
-      if (mounted) {
-        setState(() {
-          _imagePath = targetPath;
-          _isGeneratingThumbnail = false;
-        });
-      }
-    } catch (e) {
-      debugPrint("Грешка при миниатюра: $e");
-      if (mounted) setState(() => _isGeneratingThumbnail = false);
-    }
   }
 
   void _showTagsSheet() {
@@ -423,9 +395,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                       decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), color: Colors.black12),
                                       child: ClipRRect(
                                         borderRadius: BorderRadius.circular(12),
-                                        child: _isGeneratingThumbnail 
-                                          ? const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()))
-                                          : Image.file(File(_imagePath!), fit: BoxFit.contain, errorBuilder: (c, e, s) => const Icon(Icons.broken_image, size: 40, color: Colors.grey)),
+                                        child: Image.file(File(_imagePath!), fit: BoxFit.contain, errorBuilder: (c, e, s) => const Icon(Icons.broken_image, size: 40, color: Colors.grey)),
                                       ),
                                     ),
                                     if (_isEditing && _imagePath != null)
