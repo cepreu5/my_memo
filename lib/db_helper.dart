@@ -23,7 +23,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 1, // Версия 1
+      version: 2,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -40,14 +40,21 @@ class DatabaseHelper {
         color INTEGER,
         isCompleted INTEGER DEFAULT 0,
         isLocalCopy INTEGER DEFAULT 0,
-        tags TEXT,
-        videoThumbnailPath TEXT
+        tags TEXT
       )
     ''');
   }
 
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Логика за бъдещи миграции
+    if (oldVersion < 2) {
+      // Прехвърляме videoThumbnailPath → imagePath където imagePath е празно
+      await db.execute("UPDATE notes SET imagePath = videoThumbnailPath WHERE imagePath IS NULL AND videoThumbnailPath IS NOT NULL");
+      // Пресъздаваме таблицата без videoThumbnailPath (SQLite съвместимост)
+      await db.execute('CREATE TABLE notes_new (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, content TEXT, imagePath TEXT, reminderTime TEXT, color INTEGER, isCompleted INTEGER DEFAULT 0, isLocalCopy INTEGER DEFAULT 0, tags TEXT)');
+      await db.execute('INSERT INTO notes_new (id, title, content, imagePath, reminderTime, color, isCompleted, isLocalCopy, tags) SELECT id, title, content, imagePath, reminderTime, color, isCompleted, isLocalCopy, tags FROM notes');
+      await db.execute('DROP TABLE notes');
+      await db.execute('ALTER TABLE notes_new RENAME TO notes');
+    }
   }
 
   // Вмъкване на запис

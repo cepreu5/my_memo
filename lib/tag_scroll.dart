@@ -63,8 +63,8 @@ class TagScrollFilter extends StatelessWidget {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     showCheckmark: false,
                     selectedColor: Colors.yellow[700],
-                    backgroundColor: Colors.yellow[200],
-                    side: isSelected ? const BorderSide(color: Colors.orange, width: 1) : BorderSide(color: Colors.yellow[400]!),
+                    backgroundColor: Colors.cyan[200],
+                    side: isSelected ? const BorderSide(color: Colors.cyan, width: 1) : BorderSide(color: Colors.yellow[400]!),
                   ),
                 );
               },

@@ -130,7 +130,7 @@ class _FlyMenuState extends State<FlyMenu> with SingleTickerProviderStateMixin {
         double totalSweep = isLeft ? 2 * pi / 3 : -2 * pi / 3;
         double angleStep = widget.actions.length > 1 ? totalSweep / (widget.actions.length - 1) : 0;
         double currentAngle = widget.actions.length > 1 ? startAngle + (index * angleStep) : (isLeft ? 0 : pi);
-        double dist = _controller.value * 100;
+        double dist = _controller.value * 75;
         double x = cos(currentAngle) * dist;
         double y = sin(currentAngle) * dist;
         return Positioned(

@@ -57,7 +57,6 @@ class _MainListScreenState extends State<MainListScreen> {
   double _fontSizeContent = 13;
   final TextEditingController _searchController = TextEditingController();
   late StreamSubscription _intentDataStreamSubscription;
-  bool _isInitialized = false;
 
   @override
   void initState() {
@@ -81,12 +80,10 @@ class _MainListScreenState extends State<MainListScreen> {
         if (initialMedia.isNotEmpty) {
           _handleSharedMedia(initialMedia);
         }
-        if (mounted) setState(() { _isInitialized = true; });
         FlutterNativeSplash.remove();
       });
     } catch (e) {
       debugPrint("Грешка инициализация: $e");
-      if (mounted) setState(() { _isInitialized = true; });
       FlutterNativeSplash.remove();
     }
   }
@@ -127,9 +124,9 @@ class _MainListScreenState extends State<MainListScreen> {
         await File(targetPath).writeAsBytes(thumbnail.data);
         thumbnailPath = targetPath;
       } catch (e) { debugPrint("Грешка при миниатюра: $e"); }
-      _openNoteForm(initialData: { 'title': 'Споделено видео', 'content': 'Видео файл: ${sharedFile.path}', 'imagePath': thumbnailPath, 'id': null, 'color': null, 'isCompleted': 0, 'tags': null });
+      _openNoteForm(initialData: { 'title': '', 'content': '🎬 ${sharedFile.path}', 'imagePath': thumbnailPath, 'id': null, 'color': null, 'isCompleted': 0, 'tags': null });
     } else {
-      _openNoteForm(initialData: { 'imagePath': sharedFile.path, 'title': 'Споделено изображение', 'content': '', 'id': null, 'color': null, 'isCompleted': 0, 'tags': null });
+      _openNoteForm(initialData: { 'imagePath': sharedFile.path, 'title': '', 'content': '📷 ', 'id': null, 'color': null, 'isCompleted': 0, 'tags': null });
     }
   }
 
@@ -155,7 +152,7 @@ class _MainListScreenState extends State<MainListScreen> {
         }
       } catch (e) { debugPrint("Грешка при YouTube thumbnail: $e"); }
     }
-    _openNoteForm(initialData: { 'content': text, 'title': title, 'imagePath': thumbPath, 'id': null, 'color': null, 'isCompleted': 0, 'tags': null });
+    _openNoteForm(initialData: { 'content': youtubeId != null ? '🎬 $text' : text, 'title': title, 'imagePath': thumbPath, 'id': null, 'color': null, 'isCompleted': 0, 'tags': null });
   }
 
   Future<void> _refreshItems() async {
@@ -223,14 +220,6 @@ class _MainListScreenState extends State<MainListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_isInitialized) {
-      return Scaffold(
-        backgroundColor: const Color(0xFFFF5E00),
-        body: Center(
-          child: Image.asset('assets/app_icon.png', width: 200, fit: BoxFit.contain, errorBuilder: (c,e,s) => const SizedBox()),
-        ),
-      );
-    }
     final bgColor = Color(_appBackgroundColor);
     final isDarkBg = bgColor.computeLuminance() < 0.5;
     final appBarTextColor = isDarkBg ? Colors.white : Colors.black87;
@@ -276,6 +265,8 @@ class _MainListScreenState extends State<MainListScreen> {
             ],
           ),
           FlyMenu(actions: [
+            if (_selectedFilterTags.isNotEmpty)
+              FlyAction(icon: Icons.label_off_outlined, onTap: () { setState(() { _selectedFilterTags.clear(); }); _filterItems(_searchController.text); }, label: "Без етикети"),
             FlyAction(icon: _isGridView ? Icons.view_list : Icons.grid_view, onTap: _toggleView, label: "Изглед"),
             FlyAction(icon: Icons.settings, onTap: _goToSettings, label: "Настройки"),
             FlyAction(icon: Icons.add, onTap: () => _openNoteForm(), label: "Нова бележка"),
@@ -359,17 +350,14 @@ class _MainListScreenState extends State<MainListScreen> {
         ],
       ),
     );
-    final String? displayImagePath = item['imagePath'] ?? item['videoThumbnailPath'];
+    final String? displayImagePath = item['imagePath'];
     if (!isGrid && displayImagePath != null) {
       content = Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: 100, alignment: Alignment.topCenter, margin: const EdgeInsets.fromLTRB(10, 10, 0, 10),
-            child: ClipRRect(borderRadius: BorderRadius.circular(8), child: ConstrainedBox(constraints: const BoxConstraints(maxHeight: 100, maxWidth: 100), child: Stack(alignment: Alignment.center, children: [
-              Image.file(File(displayImagePath), fit: BoxFit.cover, errorBuilder: (c, e, s) => const Icon(Icons.broken_image, color: Colors.grey)),
-              if (item['videoThumbnailPath'] != null) const Icon(Icons.play_circle_fill, size: 30, color: Colors.white70),
-            ]))),
+            child: ClipRRect(borderRadius: BorderRadius.circular(8), child: ConstrainedBox(constraints: const BoxConstraints(maxHeight: 100, maxWidth: 100), child: Image.file(File(displayImagePath), fit: BoxFit.cover, errorBuilder: (c, e, s) => const Icon(Icons.broken_image, color: Colors.grey)))),
           ),
           Expanded(child: content),
         ],
@@ -378,7 +366,7 @@ class _MainListScreenState extends State<MainListScreen> {
       content = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(borderRadius: const BorderRadius.vertical(top: Radius.circular(8)), child: NoteGridImage(imagePath: displayImagePath, videoThumbnailPath: item['videoThumbnailPath'], backgroundColor: cardColor)),
+          ClipRRect(borderRadius: const BorderRadius.vertical(top: Radius.circular(8)), child: NoteGridImage(imagePath: displayImagePath, backgroundColor: cardColor)),
           content,
         ],
       );
@@ -395,7 +383,6 @@ class _MainListScreenState extends State<MainListScreen> {
         },
         onDismissed: (direction) async {
           if (item['isLocalCopy'] == 1 && item['imagePath'] != null) { try { final f = File(item['imagePath']); if (await f.exists()) await f.delete(); } catch (e) { debugPrint("Грешка файл: $e"); } }
-          if (item['videoThumbnailPath'] != null) { try { final f = File(item['videoThumbnailPath']); if (await f.exists()) await f.delete(); } catch (e) { debugPrint("Грешка миниатюра: $e"); } }
           await dbHelper.deleteItem(item['id']);
           _refreshItems();
         },
@@ -424,9 +411,8 @@ class _MainListScreenState extends State<MainListScreen> {
 
 class NoteGridImage extends StatefulWidget {
   final String imagePath;
-  final String? videoThumbnailPath;
   final Color backgroundColor;
-  const NoteGridImage({super.key, required this.imagePath, this.videoThumbnailPath, required this.backgroundColor});
+  const NoteGridImage({super.key, required this.imagePath, required this.backgroundColor});
   @override
   State<NoteGridImage> createState() => _NoteGridImageState();
 }
@@ -443,10 +429,7 @@ class _NoteGridImageState extends State<NoteGridImage> {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity, color: widget.backgroundColor,
-      child: ConstrainedBox(constraints: const BoxConstraints(maxHeight: 200), child: Stack(alignment: Alignment.topCenter, children: [
-        Padding(padding: EdgeInsets.only(top: _isPortrait ? 3 : 0), child: Image.file(File(widget.imagePath), fit: BoxFit.contain, errorBuilder: (c, e, s) => const Icon(Icons.broken_image, color: Colors.grey))),
-        if (widget.videoThumbnailPath != null) const Positioned.fill(child: Center(child: Icon(Icons.play_circle_fill, size: 60, color: Colors.white70))),
-      ])),
+      child: ConstrainedBox(constraints: const BoxConstraints(maxHeight: 200), child: Padding(padding: EdgeInsets.only(top: _isPortrait ? 3 : 0), child: Image.file(File(widget.imagePath), fit: BoxFit.contain, errorBuilder: (c, e, s) => const Icon(Icons.broken_image, color: Colors.grey)))),
     );
   }
 }

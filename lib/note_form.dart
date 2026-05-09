@@ -26,7 +26,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   final _tagController = TextEditingController(); 
   final _contentFocusNode = FocusNode();
   String? _imagePath;
-  String? _videoThumbnailPath;
+
   DateTime? _reminderTime;
   Color _selectedColor = Colors.white;
   int _isLocalCopy = 0; 
@@ -75,7 +75,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       _titleController.text = widget.item!['title']?.toString() ?? "";
       _contentController.text = widget.item!['content']?.toString() ?? "";
       _imagePath = widget.item!['imagePath'];
-      _videoThumbnailPath = widget.item!['videoThumbnailPath'];
+
       _isLocalCopy = widget.item!['isLocalCopy'] ?? 0;
       if (widget.item!['id'] == null && _imagePath != null && _isLocalCopy == 0) { _shouldCopyLocally = true; } else { _shouldCopyLocally = _isLocalCopy == 1; }
       if (widget.item!['tags'] != null && widget.item!['tags'].toString().isNotEmpty) { _selectedTags = widget.item!['tags'].toString().split(',').map((e) => e.trim()).toList(); }
@@ -89,7 +89,6 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
 
   void _deleteCurrentFileIfLocal() {
     if (_isLocalCopy == 1 && _imagePath != null) { try { final f = File(_imagePath!); if (f.existsSync()) f.deleteSync(); } catch (e) { debugPrint("Грешка чистене файл: $e"); } }
-    if (_videoThumbnailPath != null) { try { final f = File(_videoThumbnailPath!); if (f.existsSync()) f.deleteSync(); } catch (e) { debugPrint("Грешка чистене миниатюра: $e"); } }
   }
 
   Future<void> _loadDefaultColor() async {
@@ -275,7 +274,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       'title': _titleController.text.trim(),
       'content': _contentController.text.trim(),
       'imagePath': finalPath,
-      'videoThumbnailPath': _videoThumbnailPath,
+
       'reminderTime': _reminderTime?.toIso8601String(),
       'color': _selectedColor.toARGB32(),
       'isCompleted': widget.item?['isCompleted'] ?? 0,
@@ -316,7 +315,6 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     }
     if (!confirm) return;
     if (_isLocalCopy == 1 && _imagePath != null) { try { final f = File(_imagePath!); if (await f.exists()) await f.delete(); } catch (e) { debugPrint("Грешка изтриване файл: $e"); } }
-    if (_videoThumbnailPath != null) { try { final f = File(_videoThumbnailPath!); if (await f.exists()) await f.delete(); } catch (e) { debugPrint("Грешка изтриване миниатюра: $e"); } }
     if (!mounted) return;
     await dbHelper.deleteItem(widget.item!['id']);
     widget.onSaved();
@@ -351,7 +349,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
               TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отказ')),
               TextButton(onPressed: () {
                 if (_sessionFileCreated && _imagePath != null && _isLocalCopy == 1) { try { File(_imagePath!).deleteSync(); } catch (e) { debugPrint("Грешка чистене при изход: $e"); } }
-                if (widget.item?['id'] == null && _videoThumbnailPath != null) { try { File(_videoThumbnailPath!).deleteSync(); } catch (e) { debugPrint("Грешка чистене миниатюра при изход: $e"); } }
+
                 Navigator.pop(context, true);
               }, child: const Text('Отхвърли', style: TextStyle(color: Colors.red))),
             ],
@@ -386,7 +384,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (_imagePath != null || _videoThumbnailPath != null)
+                            if (_imagePath != null)
                               GestureDetector(
                                 onTap: (_isEditing && _extractYoutubeId(_contentController.text) == null) ? _editExistingImage : _openFullScreenImage,
                                 child: Stack(
@@ -397,12 +395,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                       decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), color: Colors.black12),
                                       child: ClipRRect(
                                         borderRadius: BorderRadius.circular(12),
-                                        child: _videoThumbnailPath != null
-                                          ? Stack(alignment: Alignment.center, children: [
-                                              Image.file(File(_videoThumbnailPath!), fit: BoxFit.contain, errorBuilder: (c, e, s) => const Icon(Icons.videocam_off, size: 40, color: Colors.grey)),
-                                              const Icon(Icons.play_circle_fill, size: 60, color: Colors.white70),
-                                            ])
-                                          : Image.file(File(_imagePath!), fit: BoxFit.contain, errorBuilder: (c, e, s) => const Icon(Icons.broken_image, size: 40, color: Colors.grey)),
+                                        child: Image.file(File(_imagePath!), fit: BoxFit.contain, errorBuilder: (c, e, s) => const Icon(Icons.broken_image, size: 40, color: Colors.grey)),
                                       ),
                                     ),
                                     if (_isEditing && _imagePath != null)
@@ -440,7 +433,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                 style: TextStyle(fontSize: _fontSizeContent, color: _textColor),
                                 linkStyle: TextStyle(color: _textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue),
                               ),
-                            if (_isEditing && _imagePath != null && _isLocalCopy == 0 && _videoThumbnailPath == null)
+                            if (_isEditing && _imagePath != null && _isLocalCopy == 0)
                               Padding(
                                 padding: const EdgeInsets.only(top: 10),
                                 child: SwitchListTile(
