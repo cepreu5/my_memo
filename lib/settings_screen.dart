@@ -34,6 +34,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     const Color(0xFFFFC93C), const Color(0xFF6A2C70), const Color(0xFFB83B5E), 
     const Color(0xFF005082), Colors.black,
   ];
+  List<Color> _customPalette = [];
 
   Color get _textColor => Color(_appBgColor).computeLuminance() > 0.5 ? Colors.black87 : Colors.white;
   Color get _secondaryTextColor => Color(_appBgColor).computeLuminance() > 0.5 ? Colors.black54 : Colors.white70;
@@ -65,6 +66,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _fontSizeListContent = prefs.getDouble('list_content_size') ?? 13;
       _fontSizeFormTitle = prefs.getDouble('form_title_size') ?? 18;
       _fontSizeFormContent = prefs.getDouble('form_content_size') ?? 16;
+      final customList = prefs.getStringList('custom_palette') ?? [];
+      _customPalette = customList.map((s) => Color(int.parse(s))).toList();
       if (updateControllers) {
         _listLinesController.text = _maxLinesList.toString();
         _gridLinesController.text = _maxLinesGrid.toString();
@@ -90,6 +93,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.setDouble('list_content_size', _fontSizeListContent);
     await prefs.setDouble('form_title_size', _fontSizeFormTitle);
     await prefs.setDouble('form_content_size', _fontSizeFormContent);
+    await prefs.setStringList('custom_palette', _customPalette.map((c) => c.toARGB32().toString()).toList());
     if (mounted) Navigator.pop(context);
   }
 
@@ -192,10 +196,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _buildSectionTitle(String title) => Padding(padding: const EdgeInsets.only(bottom: 8), child: Text(title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(_appBgColor).computeLuminance() > 0.5 ? Colors.blueGrey : Colors.blueAccent)));
 
   Widget _buildColorPicker({required int selectedColor, required Function(Color) onColorSelected}) {
+    final List<Color> allColors = [..._availableColors, ..._customPalette];
     return Wrap(
       spacing: 8, runSpacing: 8,
       children: [
-        ..._availableColors.map((color) {
+        ...allColors.map((color) {
           bool isSelected = selectedColor == color.toARGB32();
           return GestureDetector(
             onTap: () => onColorSelected(color),
@@ -213,7 +218,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           onTap: () async {
             final picked = await showCustomColorPicker(context, Color(selectedColor));
             if (picked != null) {
-              setState(() { if (!_availableColors.contains(picked)) _availableColors.add(picked); });
+              setState(() { 
+                if (!_availableColors.contains(picked) && !_customPalette.contains(picked)) {
+                  _customPalette.insert(0, picked);
+                  if (_customPalette.length > 8) _customPalette.removeLast();
+                }
+              });
               onColorSelected(picked);
             }
           },

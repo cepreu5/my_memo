@@ -70,6 +70,9 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     setState(() {
       _fontSizeTitle = prefs.getDouble('form_title_size') ?? 18;
       _fontSizeContent = prefs.getDouble('form_content_size') ?? 16;
+      final customList = prefs.getStringList('custom_palette') ?? [];
+      final customColors = customList.map((s) => Color(int.parse(s))).toList();
+      for (var c in customColors) { if (!_noteColors.contains(c)) _noteColors.add(c); }
     });
     if (widget.item != null) {
       _titleController.text = widget.item!['title']?.toString() ?? "";
