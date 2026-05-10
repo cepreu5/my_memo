@@ -51,10 +51,15 @@ class _MainListScreenState extends State<MainListScreen> {
   int _appBackgroundColor = const Color(0xFFFF5E00).toARGB32();
   bool _filterMatchAll = false;
   bool _confirmDelete = false;
+  bool _compactGridView = false;
   int _maxLinesList = 5;
   int _maxLinesGrid = 5;
   double _fontSizeTitle = 14;
   double _fontSizeContent = 13;
+  bool _showDate = false;
+  bool _showFlyMenuLabels = false;
+  DateTime? _startDate;
+  DateTime? _endDate;
   final TextEditingController _searchController = TextEditingController();
   late StreamSubscription _intentDataStreamSubscription;
 
@@ -96,6 +101,9 @@ class _MainListScreenState extends State<MainListScreen> {
       _fontSizeTitle = prefs.getDouble('list_title_size') ?? 14;
       _fontSizeContent = prefs.getDouble('list_content_size') ?? 13;
       _confirmDelete = prefs.getBool('confirm_delete') ?? false;
+      _compactGridView = prefs.getBool('compact_grid_view') ?? false;
+      _showDate = prefs.getBool('show_date') ?? false;
+      _showFlyMenuLabels = prefs.getBool('show_fly_menu_labels') ?? false;
       _isGridView = prefs.getBool('is_grid_view') ?? true;
     });
   }
@@ -112,9 +120,9 @@ class _MainListScreenState extends State<MainListScreen> {
     final sharedFile = media.first;
     if (sharedFile.type == SharedMediaType.text || sharedFile.type == SharedMediaType.url) { await _handleSharedText(sharedFile.path); } 
     else if (sharedFile.type == SharedMediaType.video) {
-      _openNoteForm(initialData: { 'title': '', 'content': '🎬 ${sharedFile.path}', 'imagePath': sharedFile.path, 'needsThumbnail': true, 'id': null, 'color': null, 'isCompleted': 0, 'tags': null });
+      _openNoteForm(initialData: { 'title': '🎬 ', 'content': sharedFile.path, 'imagePath': sharedFile.path, 'needsThumbnail': true, 'id': null, 'color': null, 'isCompleted': 0, 'tags': null });
     } else {
-      _openNoteForm(initialData: { 'imagePath': sharedFile.path, 'title': '', 'content': '📷 ', 'id': null, 'color': null, 'isCompleted': 0, 'tags': null });
+      _openNoteForm(initialData: { 'imagePath': sharedFile.path, 'title': '📷 ', 'content': '', 'id': null, 'color': null, 'isCompleted': 0, 'tags': null });
     }
   }
 
@@ -128,9 +136,9 @@ class _MainListScreenState extends State<MainListScreen> {
     if (text.isEmpty) return;
     String? youtubeId = _extractYoutubeId(text);
     String? thumbPath;
-    String title = 'Споделен текст';
+    String title = '📝 ';
     if (youtubeId != null) {
-      title = 'YouTube Видео';
+      title = '🎬 ';
       try {
         final response = await http.get(Uri.parse('https://img.youtube.com/vi/$youtubeId/0.jpg'));
         if (response.statusCode == 200) {
@@ -139,8 +147,26 @@ class _MainListScreenState extends State<MainListScreen> {
           await File(thumbPath).writeAsBytes(response.bodyBytes);
         }
       } catch (e) { debugPrint("Грешка при YouTube thumbnail: $e"); }
+    } else if (text.contains('http://') || text.contains('https://') || text.contains('www.')) {
+      title = '🔗 ';
     }
-    _openNoteForm(initialData: { 'content': youtubeId != null ? '🎬 $text' : text, 'title': title, 'imagePath': thumbPath, 'id': null, 'color': null, 'isCompleted': 0, 'tags': null });
+
+    String finalContent = text;
+    String finalTitle = title;
+    final urlRegExp = RegExp(r'(https?:\/\/[^\s]+|www\.[^\s]+)');
+    final match = urlRegExp.firstMatch(text);
+    if (match != null) {
+      String textPart = text.substring(0, match.start).trim();
+      String urlPart = text.substring(match.start).trim();
+      if (textPart.isNotEmpty) {
+        finalTitle = '🔗 $textPart';
+        finalContent = urlPart;
+      } else {
+        finalContent = urlPart;
+      }
+    }
+
+    _openNoteForm(initialData: { 'content': finalContent, 'title': finalTitle, 'imagePath': thumbPath, 'id': null, 'color': null, 'isCompleted': 0, 'tags': null });
   }
 
   Future<void> _refreshItems() async {
@@ -179,7 +205,17 @@ class _MainListScreenState extends State<MainListScreen> {
           if (_filterMatchAll) { matchesTags = _selectedFilterTags.every((t) => noteTagsList.contains(t)); } 
           else { matchesTags = _selectedFilterTags.any((t) => noteTagsList.contains(t)); }
         }
-        return matchesSearch && matchesTags;
+        bool matchesDate = true;
+        if (_startDate != null && _endDate != null) {
+          if (item['reminderTime'] != null) {
+            final dt = DateTime.parse(item['reminderTime']);
+            final checkDt = DateTime(dt.year, dt.month, dt.day);
+            final start = DateTime(_startDate!.year, _startDate!.month, _startDate!.day);
+            final end = DateTime(_endDate!.year, _endDate!.month, _endDate!.day);
+            matchesDate = (checkDt.isAtSameMomentAs(start) || checkDt.isAfter(start)) && (checkDt.isAtSameMomentAs(end) || checkDt.isBefore(end));
+          } else { matchesDate = false; }
+        }
+        return matchesSearch && matchesTags && matchesDate;
       }).toList();
     });
   }
@@ -244,7 +280,21 @@ class _MainListScreenState extends State<MainListScreen> {
         children: [
           Column(
             children: [
-              TagScrollFilter(allTags: _allExistingTags.toList(), selectedTags: _selectedFilterTags, textColor: appBarTextColor, onSelectionChanged: (newList) { setState(() { _selectedFilterTags = newList; }); _filterItems(_searchController.text); }),
+              TagScrollFilter(
+                allTags: _allExistingTags.toList(),
+                selectedTags: _selectedFilterTags,
+                textColor: appBarTextColor,
+                startDate: _startDate,
+                endDate: _endDate,
+                onDateRangeChanged: (start, end) {
+                  setState(() { _startDate = start; _endDate = end; });
+                  _filterItems(_searchController.text);
+                },
+                onSelectionChanged: (newList) {
+                  setState(() { _selectedFilterTags = newList; });
+                  _filterItems(_searchController.text);
+                },
+              ),
               Expanded(
                 child: _filteredItems.isEmpty
                     ? Center(child: Text('Няма открити бележки.', style: TextStyle(color: appBarTextColor)))
@@ -252,13 +302,27 @@ class _MainListScreenState extends State<MainListScreen> {
               ),
             ],
           ),
-          FlyMenu(actions: [
-            if (_selectedFilterTags.isNotEmpty)
-              FlyAction(icon: Icons.label_off_outlined, onTap: () { setState(() { _selectedFilterTags.clear(); }); _filterItems(_searchController.text); }, label: "Без етикети"),
-            FlyAction(icon: _isGridView ? Icons.view_list : Icons.grid_view, onTap: _toggleView, label: "Изглед"),
-            FlyAction(icon: Icons.settings, onTap: _goToSettings, label: "Настройки"),
-            FlyAction(icon: Icons.add, onTap: () => _openNoteForm(), label: "Нова бележка"),
-          ]),
+          FlyMenu(
+            showLabels: _showFlyMenuLabels,
+            actions: [
+              if (_selectedFilterTags.isNotEmpty || _startDate != null)
+                FlyAction(
+                  icon: Icons.label_off_outlined,
+                  onTap: () {
+                    setState(() {
+                      _selectedFilterTags.clear();
+                      _startDate = null;
+                      _endDate = null;
+                    });
+                    _filterItems(_searchController.text);
+                  },
+                  label: "Без филтри",
+                ),
+              FlyAction(icon: _isGridView ? Icons.view_list : Icons.grid_view, onTap: _toggleView, label: "Изглед"),
+              FlyAction(icon: Icons.settings, onTap: _goToSettings, label: "Настройки"),
+              FlyAction(icon: Icons.add, onTap: () => _openNoteForm(), label: "Нова бележка"),
+            ],
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton(onPressed: () => _openNoteForm(), tooltip: 'Нова бележка', child: const Icon(Icons.add)),
@@ -313,25 +377,15 @@ class _MainListScreenState extends State<MainListScreen> {
             ],
           ),
           const SizedBox(height: 4),
-          Linkify(
-            text: item['content'] ?? '',
-            onOpen: (link) async {
-              final url = Uri.parse(link.url);
-              if (await canLaunchUrl(url)) { await launchUrl(url, mode: LaunchMode.externalApplication); }
-            },
-            maxLines: (item['content'] != null && (item['content'].contains('http://') || item['content'].contains('https://') || item['content'].contains('www.'))) ? 1 : (isGrid ? _maxLinesGrid : _maxLinesList), 
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor, decoration: isDone ? TextDecoration.lineThrough : null),
-            linkStyle: TextStyle(color: textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue, decoration: TextDecoration.none),
-          ),
-          if (item['reminderTime'] != null)
+          _buildContentWithLinks(item['content'] ?? '', secondaryTextColor, textColor, isGrid),
+          if (item['reminderTime'] != null && _showDate)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Row(
                 children: [
-                  Icon(Icons.notifications_active, size: 14, color: textColor == Colors.white ? Colors.white : Colors.redAccent),
+                  Icon(Icons.calendar_today, size: 12, color: secondaryTextColor),
                   const SizedBox(width: 4),
-                  Expanded(child: Text(_formatDateTime(item['reminderTime']), style: TextStyle(fontSize: 10, color: textColor == Colors.white ? Colors.white : Colors.redAccent, fontWeight: FontWeight.bold))),
+                  Expanded(child: Text('Дата: ${_formatDateTime(item['reminderTime'])}', style: TextStyle(fontSize: 10, color: secondaryTextColor, fontWeight: FontWeight.bold))),
                 ],
               ),
             ),
@@ -354,7 +408,7 @@ class _MainListScreenState extends State<MainListScreen> {
       content = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(borderRadius: const BorderRadius.vertical(top: Radius.circular(8)), child: NoteGridImage(imagePath: displayImagePath, backgroundColor: cardColor)),
+          ClipRRect(borderRadius: const BorderRadius.vertical(top: Radius.circular(8)), child: NoteGridImage(imagePath: displayImagePath, backgroundColor: cardColor, compactView: _compactGridView)),
           content,
         ],
       );
@@ -389,6 +443,51 @@ class _MainListScreenState extends State<MainListScreen> {
     );
   }
 
+  Widget _buildContentWithLinks(String content, Color secondaryTextColor, Color textColor, bool isGrid) {
+    final urlRegExp = RegExp(r'(https?:\/\/[^\s]+|www\.[^\s]+)');
+    final match = urlRegExp.firstMatch(content);
+    final linkStyle = TextStyle(color: textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue, decoration: TextDecoration.none);
+    
+    if (match != null) {
+      final textPart = content.substring(0, match.start).trim();
+      final urlPart = content.substring(match.start).trim();
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (textPart.isNotEmpty)
+            Text(
+              textPart,
+              maxLines: isGrid ? _maxLinesGrid : _maxLinesList,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor),
+            ),
+          Linkify(
+            text: urlPart,
+            onOpen: (link) async {
+              final url = Uri.parse(link.url);
+              if (await canLaunchUrl(url)) { await launchUrl(url, mode: LaunchMode.externalApplication); }
+            },
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor),
+            linkStyle: linkStyle,
+          ),
+        ],
+      );
+    }
+    return Linkify(
+      text: content,
+      onOpen: (link) async {
+        final url = Uri.parse(link.url);
+        if (await canLaunchUrl(url)) { await launchUrl(url, mode: LaunchMode.externalApplication); }
+      },
+      maxLines: isGrid ? _maxLinesGrid : _maxLinesList,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor),
+      linkStyle: linkStyle,
+    );
+  }
+
   String _formatDateTime(String isoString) {
     try {
       final dt = DateTime.parse(isoString);
@@ -400,7 +499,8 @@ class _MainListScreenState extends State<MainListScreen> {
 class NoteGridImage extends StatefulWidget {
   final String imagePath;
   final Color backgroundColor;
-  const NoteGridImage({super.key, required this.imagePath, required this.backgroundColor});
+  final bool compactView;
+  const NoteGridImage({super.key, required this.imagePath, required this.backgroundColor, this.compactView = false});
   @override
   State<NoteGridImage> createState() => _NoteGridImageState();
 }
@@ -417,7 +517,7 @@ class _NoteGridImageState extends State<NoteGridImage> {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity, color: widget.backgroundColor,
-      child: ConstrainedBox(constraints: const BoxConstraints(maxHeight: 200), child: Padding(padding: EdgeInsets.only(top: _isPortrait ? 3 : 0), child: Image.file(File(widget.imagePath), fit: BoxFit.contain, errorBuilder: (c, e, s) => const Icon(Icons.broken_image, color: Colors.grey)))),
+      child: ConstrainedBox(constraints: BoxConstraints(maxHeight: widget.compactView ? 100 : 200), child: Padding(padding: EdgeInsets.only(top: (_isPortrait || widget.compactView) ? 3 : 0), child: Image.file(File(widget.imagePath), fit: BoxFit.contain, errorBuilder: (c, e, s) => const Icon(Icons.broken_image, color: Colors.grey)))),
     );
   }
 }

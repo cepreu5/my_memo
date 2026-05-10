@@ -17,6 +17,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _defaultNoteColor = Colors.white.toARGB32();
   bool _filterMatchAll = false;
   bool _confirmDelete = true;
+  bool _compactGridView = false;
+  bool _showDate = false;
+  bool _showFlyMenuLabels = false;
   int _maxLinesList = 5;
   int _maxLinesGrid = 5;
   double _fontSizeListTitle = 14;
@@ -60,6 +63,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _defaultNoteColor = prefs.getInt('default_note_color') ?? Colors.white.toARGB32();
       _filterMatchAll = prefs.getBool('filter_match_all') ?? false;
       _confirmDelete = prefs.getBool('confirm_delete') ?? true;
+      _compactGridView = prefs.getBool('compact_grid_view') ?? false;
+      _showDate = prefs.getBool('show_date') ?? false;
+      _showFlyMenuLabels = prefs.getBool('show_fly_menu_labels') ?? false;
       _maxLinesList = prefs.getInt('max_lines_list') ?? 5;
       _maxLinesGrid = prefs.getInt('max_lines_grid') ?? 5;
       _fontSizeListTitle = prefs.getDouble('list_title_size') ?? 14;
@@ -87,6 +93,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.setInt('default_note_color', _defaultNoteColor);
     await prefs.setBool('filter_match_all', _filterMatchAll);
     await prefs.setBool('confirm_delete', _confirmDelete);
+    await prefs.setBool('compact_grid_view', _compactGridView);
+    await prefs.setBool('show_date', _showDate);
+    await prefs.setBool('show_fly_menu_labels', _showFlyMenuLabels);
     await prefs.setInt('max_lines_list', _maxLinesList);
     await prefs.setInt('max_lines_grid', _maxLinesGrid);
     await prefs.setDouble('list_title_size', _fontSizeListTitle);
@@ -130,21 +139,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _buildNumberInput(title: 'Брой редове текст', controller: _listLinesController, min: 1, max: 20, onChanged: (val) => setState(() => _maxLinesList = val)),
               _buildSectionTitle('Матрица'),
               _buildNumberInput(title: 'Брой редове текст', controller: _gridLinesController, min: 1, max: 20, onChanged: (val) => setState(() => _maxLinesGrid = val)),
+              _buildSwitchInput(title: 'Компактен вид', value: _compactGridView, onChanged: (val) => setState(() => _compactGridView = val)),
               const SizedBox(height: 10),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
               _buildSectionTitle('Бележки на основния екран'),
               _buildNumberInput(title: 'Размер шрифт заглавие', controller: _listTitleSizeController, min: 10, max: 30, onChanged: (val) => setState(() => _fontSizeListTitle = val.toDouble())),
               _buildNumberInput(title: 'Размер шрифт текст', controller: _listContentSizeController, min: 8, max: 25, onChanged: (val) => setState(() => _fontSizeListContent = val.toDouble())),
+              _buildSwitchInput(title: 'Показване на датата', value: _showDate, onChanged: (val) => setState(() => _showDate = val)),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
               _buildSectionTitle('Редактор'),
               _buildNumberInput(title: 'Размер шрифт заглавие', controller: _formTitleSizeController, min: 14, max: 40, onChanged: (val) => setState(() => _fontSizeFormTitle = val.toDouble())),
               _buildNumberInput(title: 'Размер шрифт текст', controller: _formContentSizeController, min: 10, max: 35, onChanged: (val) => setState(() => _fontSizeFormContent = val.toDouble())),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
               _buildSectionTitle('Филтриране по етикети'),
-              SwitchListTile(title: Text(_filterMatchAll ? 'ВСИЧКИ избрани' : 'ПОНЕ ЕДИН от избраните', style: TextStyle(color: _textColor, fontSize: 14)), value: _filterMatchAll, activeThumbColor: Colors.blue, activeTrackColor: Colors.blue.withValues(alpha: 0.3), onChanged: (val) => setState(() => _filterMatchAll = val)),
+              _buildSwitchInput(
+                title: _filterMatchAll ? 'ВСИЧКИ избрани' : 'ПОНЕ ЕДИН от избраните',
+                value: _filterMatchAll,
+                onChanged: (val) => setState(() => _filterMatchAll = val),
+              ),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
               _buildSectionTitle('Потвърждение при изтриване'),
-              SwitchListTile(title: Text(_confirmDelete ? 'Включено' : 'Изключено', style: TextStyle(color: _textColor, fontSize: 14)), value: _confirmDelete, activeThumbColor: Colors.blue, activeTrackColor: Colors.blue.withValues(alpha: 0.3), onChanged: (val) => setState(() => _confirmDelete = val)),
+              _buildSwitchInput(
+                title: _confirmDelete ? 'Включено' : 'Изключено',
+                value: _confirmDelete,
+                onChanged: (val) => setState(() => _confirmDelete = val),
+              ),
+              Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
+              _buildSectionTitle('Меню'),
+              _buildSwitchInput(title: 'Етикети в менюто', value: _showFlyMenuLabels, onChanged: (val) => setState(() => _showFlyMenuLabels = val)),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
               ListTile(leading: Icon(Icons.storage, size: 20, color: _textColor), title: Text('База данни', style: TextStyle(color: _textColor)), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DbViewerScreen()))),
               ListTile(leading: Icon(Icons.folder_open, size: 20, color: _textColor), title: Text('Файлове', style: TextStyle(color: _textColor)), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LocalFilesViewerScreen()))),
@@ -193,7 +215,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildSectionTitle(String title) => Padding(padding: const EdgeInsets.only(bottom: 8), child: Text(title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(_appBgColor).computeLuminance() > 0.5 ? Colors.blueGrey : Colors.blueAccent)));
+  Widget _buildSwitchInput({required String title, required bool value, required Function(bool) onChanged}) {
+    return InkWell(
+      onTap: () => onChanged(!value),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(child: Text(title, style: TextStyle(fontSize: 13, color: _textColor))),
+            SizedBox(
+              width: 50,
+              child: Transform.scale(
+                scale: 0.8, // Намаляваме малко мащаба, за да пасне на компактния вид на полетата
+                child: Switch(
+                  value: value,
+                  activeColor: Colors.blue,
+                  onChanged: onChanged,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) => Padding(padding: const EdgeInsets.only(bottom: 8, top: 12), child: Text(title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(_appBgColor).computeLuminance() > 0.5 ? Colors.blueGrey : Colors.blueAccent)));
 
   Widget _buildColorPicker({required int selectedColor, required Function(Color) onColorSelected}) {
     final List<Color> allColors = [..._availableColors, ..._customPalette];

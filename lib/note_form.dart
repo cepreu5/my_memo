@@ -83,6 +83,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       if (widget.item!['id'] == null && _imagePath != null && _isLocalCopy == 0) { _shouldCopyLocally = true; } else { _shouldCopyLocally = _isLocalCopy == 1; }
       if (widget.item!['tags'] != null && widget.item!['tags'].toString().isNotEmpty) { _selectedTags = widget.item!['tags'].toString().split(',').map((e) => e.trim()).toList(); }
       if (widget.item!['reminderTime'] != null) { try { _reminderTime = DateTime.parse(widget.item!['reminderTime']); } catch (e) { debugPrint("Грешка дата: $e"); } }
+      else { _reminderTime = DateTime.now(); }
       if (widget.item!['color'] != null) { _selectedColor = Color(widget.item!['color']); } else { await _loadDefaultColor(); }
       _isEditing = widget.item!['id'] == null;
     } else { _isEditing = true; await _loadDefaultColor(); }
@@ -257,16 +258,8 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     return null;
   }
 
-  Future<void> _pickReminderTime() async {
-    final DateTime? pickedDate = await showDatePicker(context: context, initialDate: _reminderTime ?? DateTime.now(), firstDate: DateTime.now(), lastDate: DateTime(2100));
-    if (pickedDate != null) {
-      if (!mounted) return;
-      final TimeOfDay? pickedTime = await showTimePicker(context: context, initialTime: _reminderTime != null ? TimeOfDay.fromDateTime(_reminderTime!) : TimeOfDay.now());
-      if (pickedTime != null) { setState(() { _reminderTime = DateTime(pickedDate.year, pickedDate.month, pickedDate.day, pickedTime.hour, pickedTime.minute); }); }
-    }
-  }
-
   Future<void> _save() async {
+    _reminderTime = DateTime.now(); // Автоматично обновяваме датата при всяко записване
     String? finalPath = _imagePath;
     int finalIsLocal = _isLocalCopy;
     if (_imagePath != null && _shouldCopyLocally && _isLocalCopy == 0) {
@@ -336,8 +329,6 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    String reminderText = 'Напомняне';
-    if (_reminderTime != null) { reminderText = '${_reminderTime!.day}.${_reminderTime!.month.toString().padLeft(2, '0')} ${_reminderTime!.hour}:${_reminderTime!.minute.toString().padLeft(2, '0')}'; }
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
@@ -408,7 +399,13 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                               ),
                             const SizedBox(height: 16),
                             if (_isEditing)
-                              TextField(controller: _titleController, maxLines: null, style: TextStyle(fontSize: _fontSizeTitle, fontWeight: FontWeight.bold, color: _textColor), decoration: InputDecoration(hintText: 'Заглавие', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor)))
+                              TextField(
+                                controller: _titleController, 
+                                maxLines: null, 
+                                style: TextStyle(fontSize: _fontSizeTitle, fontWeight: FontWeight.bold, color: _textColor), 
+                                decoration: InputDecoration(hintText: 'Заглавие', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor)),
+                                contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
+                              )
                             else if (_titleController.text.isNotEmpty)
                               Text(_titleController.text, style: TextStyle(fontSize: _fontSizeTitle, fontWeight: FontWeight.bold, color: _textColor)),
                             if (_selectedTags.isNotEmpty)
@@ -425,7 +422,15 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                               ),
                             const SizedBox(height: 12),
                             if (_isEditing)
-                              TextField(controller: _contentController, focusNode: _contentFocusNode, maxLines: null, style: TextStyle(fontSize: _fontSizeContent, color: _textColor), decoration: InputDecoration(hintText: 'Съдържание...', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor)), onSubmitted: (v) => _save())
+                              TextField(
+                                controller: _contentController, 
+                                focusNode: _contentFocusNode, 
+                                maxLines: null, 
+                                style: TextStyle(fontSize: _fontSizeContent, color: _textColor), 
+                                decoration: InputDecoration(hintText: 'Съдържание...', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor)), 
+                                onSubmitted: (v) => _save(),
+                                contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
+                              )
                             else
                               Linkify(
                                 text: _contentController.text,
@@ -463,7 +468,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                     ),
                   ),
                 ),
-                if (_isEditing) _buildBottomTools(reminderText),
+                if (_isEditing) _buildBottomTools(),
               ],
             ),
             FlyMenu(actions: [
@@ -478,7 +483,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     );
   }
 
-  Widget _buildBottomTools(String reminderText) {
+  Widget _buildBottomTools() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.8), border: const Border(top: BorderSide(color: Colors.black12))),
@@ -516,8 +521,6 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
               IconButton(icon: const Icon(Icons.photo_library), onPressed: _pickFromGallery, tooltip: 'Галерия'),
               IconButton(icon: const Icon(Icons.camera_alt), onPressed: _pickFromCamera, tooltip: 'Камера'),
               IconButton(icon: const Icon(Icons.label_outline), onPressed: _showTagsSheet, tooltip: 'Етикети'),
-              const Spacer(),
-              TextButton.icon(onPressed: _pickReminderTime, icon: const Icon(Icons.alarm), label: Text(reminderText)),
             ],
           ),
         ],
