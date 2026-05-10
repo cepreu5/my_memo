@@ -43,6 +43,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   int? _currentIndex;
   List<Map<String, dynamic>> _allNotes = [];
   bool _isTask = false;
+  int _isCompleted = 0;
   final List<Color> _noteColors = [
     Colors.white,
     const Color(0xFF0A1931),
@@ -94,6 +95,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       if (widget.item!['reminderTime'] != null) { try { _reminderTime = DateTime.parse(widget.item!['reminderTime']); } catch (e) { debugPrint("Грешка дата: $e"); } }
       else { _reminderTime = DateTime.now(); }
       if (widget.item!['color'] != null) { _selectedColor = Color(widget.item!['color']); } else { await _loadDefaultColor(); }
+      _isCompleted = widget.item!['isCompleted'] ?? 0;
       _isTask = _isCompleted == 1 || _isCompleted == 2;
       _isEditing = widget.item!['id'] == null;
     } else { _isEditing = true; await _loadDefaultColor(); }
@@ -321,6 +323,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       try { _reminderTime = DateTime.parse(item['reminderTime']); } catch (e) { _reminderTime = DateTime.now(); }
     } else { _reminderTime = DateTime.now(); }
     if (item['color'] != null) { _selectedColor = Color(item['color']); }
+    _isCompleted = item['isCompleted'] ?? 0;
     _isTask = _isCompleted == 1 || _isCompleted == 2;
     _isEditing = false;
   }
@@ -530,6 +533,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
             ]),
           ],
         ),
+      ),
       ),
     );
   }
