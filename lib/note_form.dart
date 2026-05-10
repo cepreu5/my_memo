@@ -44,6 +44,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   List<Map<String, dynamic>> _allNotes = [];
   bool _isTask = false;
   int _isCompleted = 0;
+  int _appColor = const Color(0xFFFF5E00).toARGB32();
   final List<Color> _noteColors = [
     Colors.white,
     const Color(0xFF0A1931),
@@ -80,6 +81,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     setState(() {
       _fontSizeTitle = prefs.getDouble('form_title_size') ?? 18;
       _fontSizeContent = prefs.getDouble('form_content_size') ?? 16;
+      _appColor = prefs.getInt('app_background_color') ?? const Color(0xFFFF5E00).toARGB32();
       final customList = prefs.getStringList('custom_palette') ?? [];
       final customColors = customList.map((s) => Color(int.parse(s))).toList();
       for (var c in customColors) { if (!_noteColors.contains(c)) _noteColors.add(c); }
@@ -343,10 +345,11 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       confirm = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Изтриване'),
-          content: const Text('Сигурни ли сте, че искате да изтриете тази бележка?'),
+          backgroundColor: Color(_appColor),
+          title: Text('Изтриване', style: TextStyle(color: Color(_appColor).computeLuminance() > 0.5 ? Colors.black : Colors.white)),
+          content: Text('Сигурни ли сте, че искате да изтриете тази бележка?', style: TextStyle(color: Color(_appColor).computeLuminance() > 0.5 ? Colors.black87 : Colors.white70)),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отказ')),
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Отказ', style: TextStyle(color: Color(_appColor).computeLuminance() > 0.5 ? Colors.black54 : Colors.white60))),
             TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Изтрий', style: TextStyle(color: Colors.red))),
           ],
         ),
@@ -373,6 +376,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      behavior: HitTestBehavior.translucent,
       onHorizontalDragEnd: (details) {
         if (_currentIndex == null) return;
         if (details.primaryVelocity! > 0) { _switchToNote(_currentIndex! + 1); } // Надясно = следваща
@@ -391,10 +395,11 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
         final bool shouldPop = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Отхвърляне на промените?'),
-            content: const Text('Имате незапазени промени. Сигурни ли сте, че искате да излезете?'),
+            backgroundColor: Color(_appColor),
+            title: Text('Отхвърляне на промените?', style: TextStyle(color: Color(_appColor).computeLuminance() > 0.5 ? Colors.black : Colors.white)),
+            content: Text('Имате незапазени промени. Сигурни ли сте, че искате да излезете?', style: TextStyle(color: Color(_appColor).computeLuminance() > 0.5 ? Colors.black87 : Colors.white70)),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отказ')),
+              TextButton(onPressed: () => Navigator.pop(context, false), child: Text('Отказ', style: TextStyle(color: Color(_appColor).computeLuminance() > 0.5 ? Colors.black54 : Colors.white60))),
               TextButton(onPressed: () {
                 if (_sessionFileCreated && _imagePath != null && _isLocalCopy == 1) { try { File(_imagePath!).deleteSync(); } catch (e) { debugPrint("Грешка чистене при изход: $e"); } }
 
@@ -541,7 +546,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   Widget _buildBottomTools() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.8), border: const Border(top: BorderSide(color: Colors.black12))),
+      decoration: BoxDecoration(color: _selectedColor, border: Border(top: BorderSide(color: _textColor.withValues(alpha: 0.1)))),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
