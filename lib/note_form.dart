@@ -15,7 +15,9 @@ class NoteFormScreen extends StatefulWidget {
   final Map<String, dynamic>? item;
   final VoidCallback onSaved;
   final List<String> existingTags;
-  const NoteFormScreen({super.key, this.item, required this.onSaved, this.existingTags = const []});
+  final List<Map<String, dynamic>>? allNotes;
+  final int? initialIndex;
+  const NoteFormScreen({super.key, this.item, required this.onSaved, this.existingTags = const [], this.allNotes, this.initialIndex});
   @override
   State<NoteFormScreen> createState() => _NoteFormScreenState();
 }
@@ -38,6 +40,9 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   double _fontSizeTitle = 18;
   double _fontSizeContent = 16;
   final List<String> _newTagsInSession = [];
+  int? _currentIndex;
+  List<Map<String, dynamic>> _allNotes = [];
+  bool _isTask = false;
   final List<Color> _noteColors = [
     Colors.white,
     const Color(0xFF0A1931),
@@ -53,6 +58,10 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.allNotes != null) {
+      _allNotes = List.from(widget.allNotes!);
+      _currentIndex = widget.initialIndex;
+    }
     _initializeData();
   }
 
@@ -85,6 +94,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       if (widget.item!['reminderTime'] != null) { try { _reminderTime = DateTime.parse(widget.item!['reminderTime']); } catch (e) { debugPrint("Грешка дата: $e"); } }
       else { _reminderTime = DateTime.now(); }
       if (widget.item!['color'] != null) { _selectedColor = Color(widget.item!['color']); } else { await _loadDefaultColor(); }
+      _isTask = _isCompleted == 1 || _isCompleted == 2;
       _isEditing = widget.item!['id'] == null;
     } else { _isEditing = true; await _loadDefaultColor(); }
     if (!_noteColors.contains(_selectedColor)) { _noteColors.add(_selectedColor); }
@@ -258,7 +268,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     return null;
   }
 
-  Future<void> _save() async {
+  Future<void> _save({bool closeAfterSave = true}) async {
     _reminderTime = DateTime.now(); // Автоматично обновяваме датата при всяко записване
     String? finalPath = _imagePath;
     int finalIsLocal = _isLocalCopy;
@@ -270,19 +280,49 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       'title': _titleController.text.trim(),
       'content': _contentController.text.trim(),
       'imagePath': finalPath,
-
       'reminderTime': _reminderTime?.toIso8601String(),
       'color': _selectedColor.toARGB32(),
-      'isCompleted': widget.item?['isCompleted'] ?? 0,
+      'isCompleted': _isTask ? (_isCompleted == 1 ? 1 : 2) : 0,
       'isLocalCopy': finalIsLocal,
       'tags': _selectedTags.join(', '),
     };
     try {
-      if (widget.item == null || widget.item!['id'] == null) { await dbHelper.insertItem(data); } 
-      else { data['id'] = widget.item!['id']; await dbHelper.updateItem(data); }
+      if (widget.item == null || widget.item!['id'] == null) { 
+        final id = await dbHelper.insertItem(data);
+        if (widget.item != null) widget.item!['id'] = id;
+      } else { 
+        data['id'] = widget.item!['id']; 
+        await dbHelper.updateItem(data); 
+      }
       widget.onSaved();
-      if (mounted) Navigator.pop(context);
+      if (closeAfterSave && mounted) Navigator.pop(context);
     } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Грешка запис: $e'), backgroundColor: Colors.red)); }
+  }
+
+  Future<void> _switchToNote(int index) async {
+    if (index < 0 || index >= _allNotes.length) return;
+    await _save(closeAfterSave: false);
+    setState(() {
+      _currentIndex = index;
+      _initializeDataFromItem(_allNotes[index]);
+    });
+  }
+
+  void _initializeDataFromItem(Map<String, dynamic> item) {
+    _titleController.text = item['title']?.toString() ?? "";
+    _contentController.text = item['content']?.toString() ?? "";
+    _imagePath = item['imagePath'];
+    _isLocalCopy = item['isLocalCopy'] ?? 0;
+    _selectedTags = [];
+    if (item['tags'] != null && item['tags'].toString().isNotEmpty) {
+      _selectedTags = item['tags'].toString().split(',').map((e) => e.trim()).toList();
+    }
+    if (item['reminderTime'] != null) {
+      try { _reminderTime = DateTime.parse(item['reminderTime']); } catch (e) { _reminderTime = DateTime.now(); }
+    } else { _reminderTime = DateTime.now(); }
+    if (item['color'] != null) { _selectedColor = Color(item['color']); }
+    _isTask = _isCompleted == 1 || _isCompleted == 2;
+    _isEditing = false;
   }
 
   String? _extractYoutubeId(String url) {
@@ -329,7 +369,18 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
+    return GestureDetector(
+      onHorizontalDragEnd: (details) {
+        if (_currentIndex == null) return;
+        if (details.primaryVelocity! > 0) { _switchToNote(_currentIndex! + 1); } // Надясно = следваща
+        else if (details.primaryVelocity! < 0) { _switchToNote(_currentIndex! - 1); } // Наляво = предишна
+      },
+      onVerticalDragEnd: (details) {
+        if (_currentIndex == null) return;
+        if (details.primaryVelocity! < 0) { _switchToNote(_currentIndex! + 1); } // Нагоре = следваща
+        else if (details.primaryVelocity! > 0) { _switchToNote(_currentIndex! - 1); } // Надолу = предишна
+      },
+      child: PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
@@ -521,6 +572,24 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
               IconButton(icon: const Icon(Icons.photo_library), onPressed: _pickFromGallery, tooltip: 'Галерия'),
               IconButton(icon: const Icon(Icons.camera_alt), onPressed: _pickFromCamera, tooltip: 'Камера'),
               IconButton(icon: const Icon(Icons.label_outline), onPressed: _showTagsSheet, tooltip: 'Етикети'),
+              const SizedBox(width: 8),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 24, height: 24,
+                    child: Checkbox(
+                      value: _isTask,
+                      side: BorderSide(color: _secondaryTextColor),
+                      activeColor: _textColor == Colors.black87 ? Colors.black87 : Colors.white,
+                      checkColor: _selectedColor,
+                      onChanged: (val) => setState(() => _isTask = val ?? false),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text('Задача', style: TextStyle(color: _secondaryTextColor, fontSize: 13)),
+                ],
+              ),
             ],
           ),
         ],

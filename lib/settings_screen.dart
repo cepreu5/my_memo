@@ -19,7 +19,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _confirmDelete = true;
   bool _compactGridView = false;
   bool _showDate = false;
-  bool _showFlyMenuLabels = false;
   int _maxLinesList = 5;
   int _maxLinesGrid = 5;
   double _fontSizeListTitle = 14;
@@ -65,7 +64,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _confirmDelete = prefs.getBool('confirm_delete') ?? true;
       _compactGridView = prefs.getBool('compact_grid_view') ?? false;
       _showDate = prefs.getBool('show_date') ?? false;
-      _showFlyMenuLabels = prefs.getBool('show_fly_menu_labels') ?? false;
       _maxLinesList = prefs.getInt('max_lines_list') ?? 5;
       _maxLinesGrid = prefs.getInt('max_lines_grid') ?? 5;
       _fontSizeListTitle = prefs.getDouble('list_title_size') ?? 14;
@@ -95,7 +93,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.setBool('confirm_delete', _confirmDelete);
     await prefs.setBool('compact_grid_view', _compactGridView);
     await prefs.setBool('show_date', _showDate);
-    await prefs.setBool('show_fly_menu_labels', _showFlyMenuLabels);
     await prefs.setInt('max_lines_list', _maxLinesList);
     await prefs.setInt('max_lines_grid', _maxLinesGrid);
     await prefs.setDouble('list_title_size', _fontSizeListTitle);
@@ -164,9 +161,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 value: _confirmDelete,
                 onChanged: (val) => setState(() => _confirmDelete = val),
               ),
-              Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
-              _buildSectionTitle('Меню'),
-              _buildSwitchInput(title: 'Етикети в менюто', value: _showFlyMenuLabels, onChanged: (val) => setState(() => _showFlyMenuLabels = val)),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
               ListTile(leading: Icon(Icons.storage, size: 20, color: _textColor), title: Text('База данни', style: TextStyle(color: _textColor)), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DbViewerScreen()))),
               ListTile(leading: Icon(Icons.folder_open, size: 20, color: _textColor), title: Text('Файлове', style: TextStyle(color: _textColor)), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LocalFilesViewerScreen()))),

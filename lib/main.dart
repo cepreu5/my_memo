@@ -57,7 +57,6 @@ class _MainListScreenState extends State<MainListScreen> {
   double _fontSizeTitle = 14;
   double _fontSizeContent = 13;
   bool _showDate = false;
-  bool _showFlyMenuLabels = false;
   DateTime? _startDate;
   DateTime? _endDate;
   final TextEditingController _searchController = TextEditingController();
@@ -103,7 +102,6 @@ class _MainListScreenState extends State<MainListScreen> {
       _confirmDelete = prefs.getBool('confirm_delete') ?? false;
       _compactGridView = prefs.getBool('compact_grid_view') ?? false;
       _showDate = prefs.getBool('show_date') ?? false;
-      _showFlyMenuLabels = prefs.getBool('show_fly_menu_labels') ?? false;
       _isGridView = prefs.getBool('is_grid_view') ?? true;
     });
   }
@@ -220,9 +218,15 @@ class _MainListScreenState extends State<MainListScreen> {
     });
   }
 
-  void _openNoteForm({Map<String, dynamic>? initialData}) async {
+  void _openNoteForm({Map<String, dynamic>? initialData, int? index}) async {
     if (!mounted) return;
-    await Navigator.push(context, MaterialPageRoute(builder: (c) => NoteFormScreen(item: initialData, onSaved: _refreshItems, existingTags: _allExistingTags.toList())));
+    await Navigator.push(context, MaterialPageRoute(builder: (c) => NoteFormScreen(
+      item: initialData, 
+      onSaved: _refreshItems, 
+      existingTags: _allExistingTags.toList(),
+      allNotes: _filteredItems,
+      initialIndex: index,
+    )));
     if (mounted) _refreshItems();
   }
 
@@ -237,7 +241,11 @@ class _MainListScreenState extends State<MainListScreen> {
   }
 
   Future<void> _toggleComplete(Map<String, dynamic> item) async {
-    final newStatus = item['isCompleted'] == 1 ? 0 : 1;
+    final currentStatus = item['isCompleted'] ?? 0;
+    int newStatus;
+    if (currentStatus == 1) { newStatus = 2; }
+    else if (currentStatus == 2) { newStatus = 1; }
+    else { newStatus = 1; } // Fallback
     await dbHelper.updateItem({ ...item, 'isCompleted': newStatus });
     if (mounted) _refreshItems();
   }
@@ -303,7 +311,6 @@ class _MainListScreenState extends State<MainListScreen> {
             ],
           ),
           FlyMenu(
-            showLabels: _showFlyMenuLabels,
             actions: [
               if (_selectedFilterTags.isNotEmpty || _startDate != null)
                 FlyAction(
@@ -371,8 +378,10 @@ class _MainListScreenState extends State<MainListScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(width: 24, height: 24, child: Checkbox(value: isDone, side: BorderSide(color: textColor.withValues(alpha: 0.5)), checkColor: cardColor, activeColor: textColor, onChanged: (_) => _toggleComplete(item))),
-              const SizedBox(width: 4),
+              if (item['isCompleted'] != 0) ...[
+                SizedBox(width: 24, height: 24, child: Checkbox(value: isDone, side: BorderSide(color: textColor.withValues(alpha: 0.5)), checkColor: cardColor, activeColor: textColor, onChanged: (_) => _toggleComplete(item))),
+                const SizedBox(width: 4),
+              ],
               Expanded(child: Text(item['title'] ?? 'Без заглавие', maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.bold, fontSize: _fontSizeTitle, color: textColor, decoration: isDone ? TextDecoration.lineThrough : null))),
             ],
           ),
@@ -385,7 +394,7 @@ class _MainListScreenState extends State<MainListScreen> {
                 children: [
                   Icon(Icons.calendar_today, size: 12, color: secondaryTextColor),
                   const SizedBox(width: 4),
-                  Expanded(child: Text('Дата: ${_formatDateTime(item['reminderTime'])}', style: TextStyle(fontSize: 10, color: secondaryTextColor, fontWeight: FontWeight.bold))),
+                  Expanded(child: Text('${_formatDateTime(item['reminderTime'])}', style: TextStyle(fontSize: 10, color: secondaryTextColor))), // FontWeight.bold
                 ],
               ),
             ),
@@ -436,7 +445,11 @@ class _MainListScreenState extends State<MainListScreen> {
           ),
           child: Material(
             color: Colors.transparent,
-            child: InkWell(borderRadius: BorderRadius.circular(8), onTap: () => _openNoteForm(initialData: item), child: content),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8), 
+              onTap: () => _openNoteForm(initialData: item, index: _filteredItems.indexOf(item)), 
+              child: content
+            ),
           ),
         ),
       ),
