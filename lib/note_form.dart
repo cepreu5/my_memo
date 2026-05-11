@@ -364,6 +364,54 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       _contentController.text = parts.sublist(1).join('\n').trim();
     });
   }
+  void _toggleList(String type) {
+    final text = _contentController.text;
+    final selection = _contentController.selection;
+    int start = selection.start;
+    int end = selection.end;
+    if (start == -1) { start = 0; end = text.length; }
+    if (start > end) { final t = start; start = end; end = t; }
+    int lineStart = text.lastIndexOf('\n', start - 1) + 1;
+    int lineEnd = text.indexOf('\n', end);
+    if (lineEnd == -1) lineEnd = text.length;
+    String selectedPart = text.substring(lineStart, lineEnd);
+    List<String> lines = selectedPart.split('\n');
+    RegExp bulletPattern = RegExp(r'^[•\-\*]\s+');
+    RegExp numberPattern = RegExp(r'^\d+\.\s+');
+    RegExp checkPattern = RegExp(r'^[☐☑\[\s?[xXvV]?\s?\]]\s+');
+    RegExp anyPattern = RegExp(r'^([•\-\*]\s+|\d+\.\s+|[☐☑\[\s?[xXvV]?\s?\]]\s+)');
+    RegExp targetPattern = type == 'bullet' ? bulletPattern : (type == 'number' ? numberPattern : checkPattern);
+    bool allHaveTarget = true;
+    for (var line in lines) { if (line.trim().isNotEmpty && !targetPattern.hasMatch(line)) { allHaveTarget = false; break; } }
+    List<String> newLines = [];
+    for (int i = 0; i < lines.length; i++) {
+      String line = lines[i];
+      if (allHaveTarget) { newLines.add(line.replaceFirst(targetPattern, '')); } 
+      else {
+        String cleanLine = line.replaceFirst(anyPattern, '');
+        if (type == 'bullet') newLines.add('• $cleanLine');
+        else if (type == 'number') newLines.add('${i + 1}. $cleanLine');
+        else if (type == 'check') newLines.add('☐ $cleanLine');
+      }
+    }
+    String newJoined = newLines.join('\n');
+    _contentController.value = TextEditingValue(text: text.replaceRange(lineStart, lineEnd, newJoined), selection: TextSelection(baseOffset: lineStart, extentOffset: lineStart + newJoined.length));
+  }
+  void _onLinkOpen(LinkableElement link) async {
+    final url = Uri.parse(link.url);
+    if (await canLaunchUrl(url)) { await launchUrl(url, mode: LaunchMode.externalApplication); }
+  }
+  void _toggleCheckboxLine(int index) {
+    final lines = _contentController.text.split('\n');
+    final line = lines[index];
+    final match = RegExp(r'^[☐☑\[\s?[xXvV]?\s?\]]\s+').firstMatch(line);
+    if (match != null) {
+      final isChecked = line.startsWith('☑') || match.group(0)!.contains(RegExp(r'[xv]'));
+      lines[index] = line.replaceFirst(RegExp(r'^[☐☑\[\s?[xXvV]?\s?\]]\s+'), isChecked ? '☐ ' : '☑ ');
+      setState(() { _contentController.text = lines.join('\n'); });
+      _save(closeAfterSave: false);
+    }
+  }
 
   String? _extractYoutubeId(String url) {
     final regExp = RegExp(r'(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|shorts\/|.*[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})', caseSensitive: false);
@@ -426,7 +474,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
-        if (!_isEditing) { Navigator.of(context).pop(); return; }
+        if (!_isEditing || (_titleController.text.trim().isEmpty && _contentController.text.trim().isEmpty)) { Navigator.of(context).pop(); return; }
         final bool shouldPop = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
@@ -545,14 +593,41 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                     onSubmitted: (v) => _save(),
                                     contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
                                   )
-                                : Linkify(
-                                    text: _contentController.text,
-                                    onOpen: (link) async {
-                                      final url = Uri.parse(link.url);
-                                      if (await canLaunchUrl(url)) { await launchUrl(url, mode: LaunchMode.externalApplication); }
-                                    },
-                                    style: TextStyle(fontSize: _fontSizeContent, color: _textColor),
-                                    linkStyle: TextStyle(color: _textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue),
+                                : Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: _contentController.text.split('\n').asMap().entries.map((e) {
+                                      final line = e.value;
+                                      final index = e.key;
+                                      final checkMatch = RegExp(r'^[☐☑\[\s?[xXvV]?\s?\]]\s+').firstMatch(line);
+                                      if (checkMatch != null) {
+                                        final isChecked = line.startsWith('☑') || checkMatch.group(0)!.contains(RegExp(r'[xv]'));
+                                        return InkWell(
+                                          onTap: () => _toggleCheckboxLine(index),
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(vertical: 1),
+                                            child: Row(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Icon(isChecked ? Icons.check_box : Icons.check_box_outline_blank, size: 22, color: _textColor),
+                                                const SizedBox(width: 8),
+                                                Expanded(child: Linkify(
+                                                  text: line.substring(checkMatch.end),
+                                                  onOpen: _onLinkOpen,
+                                                  style: TextStyle(fontSize: _fontSizeContent, color: _textColor, decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.3),
+                                                  linkStyle: TextStyle(color: _textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue),
+                                                )),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                      return Linkify(
+                                        text: line,
+                                        onOpen: _onLinkOpen,
+                                        style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.3),
+                                        linkStyle: TextStyle(color: _textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue),
+                                      );
+                                    }).toList(),
                                   ),
                             ),
                             if (_isEditing && _imagePath != null && _isLocalCopy == 0)
@@ -633,15 +708,18 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
           const Divider(),
           Row(
             children: [
-              IconButton(icon: const Icon(Icons.photo_library), onPressed: _pickFromGallery, tooltip: 'Галерия'),
-              IconButton(icon: const Icon(Icons.camera_alt), onPressed: _pickFromCamera, tooltip: 'Камера'),
-              IconButton(icon: const Icon(Icons.label_outline), onPressed: _showTagsDialog, tooltip: 'Етикети'),
-              const SizedBox(width: 8),
+              IconButton(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, icon: const Icon(Icons.photo_library, size: 20), onPressed: _pickFromGallery, tooltip: 'Галерия'),
+              IconButton(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, icon: const Icon(Icons.camera_alt, size: 20), onPressed: _pickFromCamera, tooltip: 'Камера'),
+              IconButton(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, icon: const Icon(Icons.label_outline, size: 20), onPressed: _showTagsDialog, tooltip: 'Етикети'),
+              IconButton(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, icon: const Icon(Icons.format_list_bulleted, size: 20), onPressed: () => _toggleList('bullet'), tooltip: 'Списък'),
+              IconButton(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, icon: const Icon(Icons.format_list_numbered, size: 20), onPressed: () => _toggleList('number'), tooltip: 'Номериран списък'),
+              IconButton(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, icon: const Icon(Icons.checklist, size: 20), onPressed: () => _toggleList('check'), tooltip: 'Пазаруване'),
+              const Spacer(),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   SizedBox(
-                    width: 24, height: 24,
+                    width: 20, height: 20,
                     child: Checkbox(
                       value: _isTask,
                       side: BorderSide(color: _secondaryTextColor),
@@ -651,7 +729,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                     ),
                   ),
                   const SizedBox(width: 4),
-                  Text('Задача', style: TextStyle(color: _secondaryTextColor, fontSize: 13)),
+                  Text('Задача', style: TextStyle(color: _secondaryTextColor, fontSize: 12)),
                 ],
               ),
             ],

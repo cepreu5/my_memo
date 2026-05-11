@@ -91,7 +91,7 @@ class TagScrollFilter extends StatelessWidget {
                                    const Icon(Icons.sort, size: 12, color: Colors.black87),
                                 ],
                             ],
-                            const Icon(Icons.arrow_drop_down, size: 14, color: Colors.black54),
+                            // const Icon(Icons.arrow_drop_down, size: 14, color: Colors.black54),
                           ],
                         ),
                       ),
