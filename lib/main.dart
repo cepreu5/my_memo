@@ -62,6 +62,18 @@ class _MainListScreenState extends State<MainListScreen> {
   int? _filterColor;
   bool _filterTasksOnly = false;
   bool _reverseOrder = false;
+  bool _sortById = false;
+  int _maxTitleLength = 70;
+  int _appColor = const Color(0xFFFF5E00).toARGB32();
+  List<Color> _noteColors = [
+    Colors.white, const Color(0xFF0A1931), const Color(0xFFFF5E00), 
+    const Color(0xFFFFC93C), const Color(0xFF6A2C70), const Color(0xFFB83B5E), 
+    const Color(0xFF005082), Colors.black,
+  ];
+  Color _contrast(Color background, Color ifBright, Color ifDark) {
+    return background.computeLuminance() > 0.5 ? ifBright : ifDark;
+  }
+  final TextEditingController _tagController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
   late StreamSubscription _intentDataStreamSubscription;
 
@@ -103,9 +115,20 @@ class _MainListScreenState extends State<MainListScreen> {
       _fontSizeTitle = prefs.getDouble('list_title_size') ?? 14;
       _fontSizeContent = prefs.getDouble('list_content_size') ?? 13;
       _confirmDelete = prefs.getBool('confirm_delete') ?? false;
+      _isGridView = prefs.getBool('is_grid_view') ?? true;
       _compactGridView = prefs.getBool('compact_grid_view') ?? false;
       _showDate = prefs.getBool('show_date') ?? false;
-      _isGridView = prefs.getBool('is_grid_view') ?? true;
+      _maxTitleLength = prefs.getInt('max_title_length') ?? 70;
+      _appColor = prefs.getInt('bg_color') ?? const Color(0xFFFF5E00).toARGB32();
+      final customList = prefs.getStringList('custom_palette') ?? [];
+      _noteColors = [
+        Colors.white, const Color(0xFF0A1931), const Color(0xFFFF5E00), 
+        const Color(0xFFFFC93C), const Color(0xFF6A2C70), const Color(0xFFB83B5E), 
+        const Color(0xFF005082), Colors.black,
+      ];
+      if (customList.isNotEmpty) {
+        _noteColors.addAll(customList.map((s) => Color(int.parse(s))));
+      }
     });
   }
 
@@ -158,7 +181,7 @@ class _MainListScreenState extends State<MainListScreen> {
     if (match != null) {
       String textPart = text.substring(0, match.start).trim();
       String urlPart = text.substring(match.start).trim();
-      if (textPart.length > 70) {
+      if (textPart.length > _maxTitleLength) {
         finalTitle = title;
         finalContent = '$textPart\n$urlPart';
       } else if (textPart.isNotEmpty) {
@@ -168,7 +191,7 @@ class _MainListScreenState extends State<MainListScreen> {
         finalContent = urlPart;
       }
     } else {
-      if (text.length > 70) {
+      if (text.length > _maxTitleLength) {
         finalTitle = title;
         finalContent = text;
       } else {
@@ -229,12 +252,327 @@ class _MainListScreenState extends State<MainListScreen> {
         bool matchesTasks = !_filterTasksOnly || (item['isCompleted'] == 1 || item['isCompleted'] == 2);
         return matchesSearch && matchesTags && matchesDate && matchesColor && matchesTasks;
       }).toList();
-      if (_reverseOrder) {
-        _filteredItems.sort((a, b) => (a['id'] ?? 0).compareTo(b['id'] ?? 0)); // Oldest first
-      } else {
-        _filteredItems.sort((a, b) => (b['id'] ?? 0).compareTo(a['id'] ?? 0)); // Newest first (default)
-      }
+      _filteredItems.sort((a, b) {
+        if (_sortById) {
+          final valA = (a['id'] ?? 0);
+          final valB = (b['id'] ?? 0);
+          return _reverseOrder ? valA.compareTo(valB) : valB.compareTo(valA);
+        } else {
+          final valA = (a['reminderTime'] ?? '').toString();
+          final valB = (b['reminderTime'] ?? '').toString();
+          return _reverseOrder ? valA.compareTo(valB) : valB.compareTo(valA);
+        }
+      });
     });
+  }
+
+  void _showFilterDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final Color contrastColor = _contrast(Color(_appColor), Colors.black, Colors.white);
+            final Color secondaryContrast = _contrast(Color(_appColor), Colors.black54, Colors.white70);
+            return AlertDialog(
+              backgroundColor: Color(_appColor),
+              title: Row(
+                children: [
+                  Text("Филтриране", style: TextStyle(color: contrastColor)),
+                  const Spacer(),
+                  IconButton(icon: Icon(Icons.close, color: contrastColor), onPressed: () => Navigator.pop(ctx)),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    InkWell(
+                      onTap: () async {
+                        final picked = await showDateRangePicker(
+                          context: context,
+                          firstDate: DateTime(2000),
+                          lastDate: DateTime(2100),
+                          initialDateRange: (_startDate != null && _endDate != null) ? DateTimeRange(start: _startDate!, end: _endDate!) : null,
+                        );
+                        if (picked != null) {
+                          setState(() { _startDate = picked.start; _endDate = picked.end; });
+                          _filterItems(_searchController.text);
+                          setModalState(() {});
+                        }
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        child: Row(
+                          children: [
+                            Icon(Icons.date_range, color: contrastColor),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  Text("Период", style: TextStyle(color: contrastColor)),
+                                  if (_startDate != null) ...[
+                                    const SizedBox(width: 8),
+                                    Text("${_startDate!.day}.${_startDate!.month.toString().padLeft(2, '0')}-${_endDate!.day}.${_endDate!.month.toString().padLeft(2, '0')}", style: TextStyle(color: secondaryContrast, fontSize: 12)),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            if (_startDate != null)
+                              IconButton(
+                                visualDensity: VisualDensity.compact,
+                                padding: EdgeInsets.zero,
+                                icon: Icon(Icons.clear, color: contrastColor, size: 20),
+                                onPressed: () {
+                                  setState(() { _startDate = null; _endDate = null; });
+                                  _filterItems(_searchController.text);
+                                  setModalState(() {});
+                                },
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Row(children: [Icon(Icons.palette, color: contrastColor), const SizedBox(width: 10), Text("Цвят", style: TextStyle(color: contrastColor))]),
+                    const SizedBox(height: 10),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 34),
+                      child: Wrap(
+                        spacing: 8, runSpacing: 8,
+                        children: _noteColors.map((c) {
+                          final isSelected = _filterColor == c.toARGB32();
+                          return GestureDetector(
+                            onTap: () {
+                              setState(() { _filterColor = isSelected ? null : c.toARGB32(); });
+                              _filterItems(_searchController.text);
+                              setModalState(() {});
+                            },
+                            child: Container(
+                              width: 30, height: 30,
+                              decoration: BoxDecoration(
+                                color: c, shape: BoxShape.circle,
+                                border: Border.all(color: isSelected ? Colors.blue : Colors.grey.shade300, width: isSelected ? 3 : 1),
+                              ),
+                              child: isSelected ? const Icon(Icons.check, size: 20, color: Colors.blue) : null,
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                    // Divider(color: contrastColor.withValues(alpha: 0.2)),
+                    InkWell(
+                      onTap: () {
+                        setState(() { _filterTasksOnly = !_filterTasksOnly; });
+                        _filterItems(_searchController.text);
+                        setModalState(() {});
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4.0),
+                        child: Row(
+                          children: [
+                            Icon(Icons.task_alt, color: contrastColor),
+                            const SizedBox(width: 10),
+                            Expanded(child: Text("Само задачи", style: TextStyle(color: contrastColor))),
+                            Checkbox(
+                              visualDensity: VisualDensity.compact,
+                              value: _filterTasksOnly,
+                              activeColor: contrastColor,
+                              side: BorderSide(
+                                color: contrastColor,
+                                width: 2.0,
+                              ),
+                              checkColor: Color(_appColor),
+                              onChanged: (val) {
+                                setState(() { _filterTasksOnly = val ?? false; });
+                                _filterItems(_searchController.text);
+                                setModalState(() {});
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () {
+                        setState(() { _sortById = !_sortById; });
+                        _filterItems(_searchController.text);
+                        setModalState(() {});
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4.0),
+                        child: Row(
+                          children: [
+                            Icon(Icons.format_list_numbered, color: contrastColor),
+                            const SizedBox(width: 10),
+                            Expanded(child: Text("Последователен ред", style: TextStyle(color: contrastColor))),
+                            Checkbox(
+                              visualDensity: VisualDensity.compact,
+                              value: _sortById,
+                              activeColor: contrastColor,
+                              side: BorderSide(color: contrastColor, width: 2.0),
+                              checkColor: Color(_appColor),
+                              onChanged: (val) {
+                                setState(() { _sortById = val ?? false; });
+                                _filterItems(_searchController.text);
+                                setModalState(() {});
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Divider(color: contrastColor.withValues(alpha: 0.2)),
+                    InkWell(
+                      onTap: () {
+                        setState(() { _reverseOrder = !_reverseOrder; });
+                        _filterItems(_searchController.text);
+                        setModalState(() {});
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4.0),
+                        child: Row(
+                          children: [
+                            Icon(Icons.sort, color: contrastColor),
+                            const SizedBox(width: 10),
+                            Expanded(child: Text("Обратно подреждане", style: TextStyle(color: contrastColor))),
+                            Checkbox(
+                              visualDensity: VisualDensity.compact,
+                              value: _reverseOrder,
+                              activeColor: contrastColor,
+                              side: BorderSide(color: contrastColor, width: 2.0),
+                              checkColor: Color(_appColor),
+                              onChanged: (val) {
+                                setState(() { _reverseOrder = val ?? false; });
+                                _filterItems(_searchController.text);
+                                setModalState(() {});
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () {
+                  setState(() { _startDate = null; _endDate = null; _filterColor = null; _filterTasksOnly = false; _reverseOrder = false; _sortById = false; });
+                  _filterItems(_searchController.text);
+                  Navigator.pop(ctx);
+                }, child: Text("Изчисти всички", style: TextStyle(color: secondaryContrast))),
+                ElevatedButton(onPressed: () => Navigator.pop(ctx), child: const Text("Готово")),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showTagsModal(Map<String, dynamic> item) {
+    List<String> currentTags = (item['tags'] ?? '').toString().split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final Color contrastColor = _contrast(Color(_appColor), Colors.black, Colors.white);
+            final Color secondaryContrast = _contrast(Color(_appColor), Colors.black54, Colors.white70);
+            List<String> allTags = _allExistingTags.toList()..sort();
+            return AlertDialog(
+              backgroundColor: Color(_appColor),
+              title: Text('Етикети за "${item['title'] ?? 'Бележка'}"', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: contrastColor)),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (allTags.isNotEmpty) ...[
+                      Text("Избери:", style: TextStyle(fontSize: 12, color: secondaryContrast)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 4, runSpacing: 4,
+                        children: allTags.map((tag) {
+                          bool isSelected = currentTags.contains(tag);
+                          return FilterChip(
+                            visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            padding: EdgeInsets.zero,
+                            labelPadding: const EdgeInsets.symmetric(horizontal: 4.0),
+                            label: Text(tag, style: const TextStyle(fontSize: 10)),
+                            selected: isSelected,
+                            onSelected: (val) {
+                              setModalState(() {
+                                if (val) { if (!currentTags.contains(tag)) currentTags.add(tag); } 
+                                else { currentTags.remove(tag); }
+                              });
+                            },
+                            showCheckmark: false,
+                            selectedColor: Colors.yellow[700],
+                            backgroundColor: Colors.cyan[200],
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            side: isSelected ? const BorderSide(color: Colors.cyan, width: 1) : BorderSide(color: Colors.cyan[400]!),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    Text("Нов етикет:", style: TextStyle(fontSize: 12, color: secondaryContrast)),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _tagController,
+                            style: TextStyle(color: contrastColor, fontSize: 13),
+                            decoration: InputDecoration(
+                              hintText: "Име...", 
+                              hintStyle: TextStyle(color: secondaryContrast.withValues(alpha: 0.4), fontSize: 13),
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                              enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: secondaryContrast.withValues(alpha: 0.2))),
+                            ),
+                            onSubmitted: (val) {
+                              if (val.trim().isNotEmpty && !currentTags.contains(val.trim())) {
+                                setModalState(() { currentTags.add(val.trim()); if (!_allExistingTags.contains(val.trim())) _allExistingTags.add(val.trim()); });
+                                _tagController.clear();
+                              }
+                            },
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.add, size: 20, color: contrastColor),
+                          onPressed: () {
+                             final val = _tagController.text;
+                             if (val.trim().isNotEmpty && !currentTags.contains(val.trim())) {
+                                setModalState(() { currentTags.add(val.trim()); if (!_allExistingTags.contains(val.trim())) _allExistingTags.add(val.trim()); });
+                                _tagController.clear();
+                             }
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context), child: Text("Отказ", style: TextStyle(color: secondaryContrast))),
+                ElevatedButton(
+                  onPressed: () async {
+                    Map<String, dynamic> updatedItem = Map.from(item);
+                    updatedItem['tags'] = currentTags.join(', ');
+                    await dbHelper.updateItem(updatedItem);
+                    _refreshItems();
+                    if (context.mounted) Navigator.pop(context);
+                  },
+                  child: const Text('Запази'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   void _openNoteForm({Map<String, dynamic>? initialData, int? index}) async {
@@ -316,22 +654,7 @@ class _MainListScreenState extends State<MainListScreen> {
                 filterColor: _filterColor,
                 tasksOnly: _filterTasksOnly,
                 reverseOrder: _reverseOrder,
-                onDateRangeChanged: (start, end) {
-                  setState(() { _startDate = start; _endDate = end; });
-                  _filterItems(_searchController.text);
-                },
-                onColorChanged: (color) {
-                  setState(() { _filterColor = color; });
-                  _filterItems(_searchController.text);
-                },
-                onTasksOnlyChanged: (val) {
-                  setState(() { _filterTasksOnly = val; });
-                  _filterItems(_searchController.text);
-                },
-                onReverseOrderChanged: (val) {
-                  setState(() { _reverseOrder = val; });
-                  _filterItems(_searchController.text);
-                },
+                onOpenFilterMenu: _showFilterDialog,
                 onSelectionChanged: (newList) {
                   setState(() { _selectedFilterTags = newList; });
                   _filterItems(_searchController.text);
@@ -357,6 +680,14 @@ class _MainListScreenState extends State<MainListScreen> {
           ),
           FlyMenu(
             actions: [
+              if (_searchController.text.isNotEmpty)
+                FlyAction(
+                  icon: Icons.search_off,
+                  onTap: () { _searchController.clear(); _filterItems(''); },
+                  label: "Без търсене",
+                ),
+              FlyAction(icon: _isGridView ? Icons.view_list : Icons.grid_view, onTap: _toggleView, label: "Изглед"),
+              FlyAction(icon: Icons.filter_list, onTap: _showFilterDialog, label: "Филтри"),
               if (_selectedFilterTags.isNotEmpty || _startDate != null || _filterColor != null || _filterTasksOnly || _reverseOrder)
                 FlyAction(
                   icon: Icons.label_off_outlined,
@@ -373,9 +704,8 @@ class _MainListScreenState extends State<MainListScreen> {
                   },
                   label: "Без филтри",
                 ),
-              FlyAction(icon: _isGridView ? Icons.view_list : Icons.grid_view, onTap: _toggleView, label: "Изглед"),
-              FlyAction(icon: Icons.settings, onTap: _goToSettings, label: "Настройки"),
               FlyAction(icon: Icons.add, onTap: () => _openNoteForm(), label: "Нова бележка"),
+              FlyAction(icon: Icons.settings, onTap: _goToSettings, label: "Настройки"),
             ],
           ),
         ],
@@ -476,11 +806,24 @@ class _MainListScreenState extends State<MainListScreen> {
       padding: const EdgeInsets.only(bottom: 8.0),
       child: Dismissible(
         key: Key(item['id'].toString()),
-        direction: DismissDirection.startToEnd,
+        direction: DismissDirection.horizontal,
         background: Container(decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(8)), alignment: Alignment.centerLeft, padding: const EdgeInsets.only(left: 20), child: const Icon(Icons.delete, color: Colors.white)),
+        secondaryBackground: Container(decoration: BoxDecoration(color: Colors.blueAccent, borderRadius: BorderRadius.circular(8)), alignment: Alignment.centerRight, padding: const EdgeInsets.only(right: 20), child: const Icon(Icons.label, color: Colors.white)),
         confirmDismiss: (direction) async {
+          if (direction == DismissDirection.endToStart) {
+            _showTagsModal(item);
+            return false;
+          }
           if (!_confirmDelete) return true;
-          return await showDialog<bool>(context: context, builder: (c) => AlertDialog(title: const Text('Потвърждение'), content: const Text('Сигурни ли сте, че искате да изтриете тази бележка?'), actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Отказ')), TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Изтриване', style: TextStyle(color: Colors.red)))])) ?? false;
+          return await showDialog<bool>(context: context, builder: (c) => AlertDialog(
+            backgroundColor: Color(_appColor),
+            title: Text('Потвърждение', style: TextStyle(color: _contrast(Color(_appColor), Colors.black, Colors.white))), 
+            content: Text('Сигурни ли сте, че искате да изтриете тази бележка?', style: TextStyle(color: _contrast(Color(_appColor), Colors.black87, Colors.white70))), 
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(c, false), child: Text('Отказ', style: TextStyle(color: _contrast(Color(_appColor), Colors.black54, Colors.white60)))), 
+              TextButton(onPressed: () => Navigator.pop(c, true), child: Text('Изтриване', style: TextStyle(color: _contrast(Color(_appColor), Colors.black54, Colors.white60))))
+            ]
+          )) ?? false;
         },
         onDismissed: (direction) async {
           if (item['isLocalCopy'] == 1 && item['imagePath'] != null) { try { final f = File(item['imagePath']); if (await f.exists()) await f.delete(); } catch (e) { debugPrint("Грешка файл: $e"); } }

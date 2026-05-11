@@ -54,9 +54,12 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     const Color(0xFFB83B5E),
     const Color(0xFF005082),
   ];
-  Color get _textColor => _selectedColor.computeLuminance() > 0.5 ? Colors.black87 : Colors.white;
-  Color get _secondaryTextColor => _selectedColor.computeLuminance() > 0.5 ? Colors.black54 : Colors.white70;
-  Color get _areaColor => Color.lerp(_selectedColor, _selectedColor.computeLuminance() > 0.5 ? Colors.black : Colors.white, 0.05)!;
+  Color get _textColor => _contrast(_selectedColor, Colors.black87, Colors.white);
+  Color get _secondaryTextColor => _contrast(_selectedColor, Colors.black54, Colors.white70);
+  Color get _areaColor => Color.lerp(_selectedColor, _contrast(_selectedColor, Colors.black, Colors.white), 0.05)!;
+  Color _contrast(Color background, Color ifBright, Color ifDark) {
+    return background.computeLuminance() > 0.5 ? ifBright : ifDark;
+  }
 
   @override
   void initState() {
@@ -82,7 +85,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     setState(() {
       _fontSizeTitle = prefs.getDouble('form_title_size') ?? 18;
       _fontSizeContent = prefs.getDouble('form_content_size') ?? 16;
-      _appColor = prefs.getInt('app_background_color') ?? const Color(0xFFFF5E00).toARGB32();
+      _appColor = prefs.getInt('bg_color') ?? const Color(0xFFFF5E00).toARGB32();
       final customList = prefs.getStringList('custom_palette') ?? [];
       final customColors = customList.map((s) => Color(int.parse(s))).toList();
       for (var c in customColors) { if (!_noteColors.contains(c)) _noteColors.add(c); }
@@ -114,87 +117,106 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     final prefs = await SharedPreferences.getInstance();
     final defaultColorVal = prefs.getInt('default_note_color');
     if (defaultColorVal != null) { setState(() { _selectedColor = Color(defaultColorVal); }); }
+    final customList = prefs.getStringList('custom_palette') ?? [];
+    for (var s in customList) {
+      final c = Color(int.parse(s));
+      if (!_noteColors.contains(c)) _noteColors.add(c);
+    }
     if (!_noteColors.contains(_selectedColor)) { _noteColors.add(_selectedColor); }
   }
 
-  void _showTagsSheet() {
-    showModalBottomSheet(
+  void _showTagsDialog() {
+    showDialog(
       context: context,
-      isScrollControlled: true,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            final allAvailableTags = { ...widget.existingTags, ..._newTagsInSession }.toList();
-            return Padding(
-              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 20, right: 20, top: 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("Управление на етикети", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 15),
-                  if (allAvailableTags.isNotEmpty) ...[
-                    const Text("Избери от съществуващи:", style: TextStyle(fontSize: 14, color: Colors.grey)),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      children: allAvailableTags.map((tag) {
-                        final isSelected = _selectedTags.contains(tag);
-                        return FilterChip(
-                          label: Text(tag),
-                          selected: isSelected,
-                          onSelected: (val) {
-                            setState(() { val ? _selectedTags.add(tag) : _selectedTags.remove(tag); });
-                            setModalState(() {});
-                          },
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-                  const Text("Добави нов етикет:", style: TextStyle(fontSize: 14, color: Colors.grey)),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _tagController,
-                          decoration: const InputDecoration(hintText: "Име на етикет"),
-                          onSubmitted: (val) {
-                            if (val.trim().isNotEmpty) {
-                              String nt = val.trim();
-                              setState(() {
-                                if (!_selectedTags.contains(nt)) _selectedTags.add(nt);
-                                if (!widget.existingTags.contains(nt) && !_newTagsInSession.contains(nt)) _newTagsInSession.add(nt);
+            final allAvailableTags = { ...widget.existingTags, ..._newTagsInSession }.toList()..sort();
+            final Color contrastColor = _contrast(Color(_appColor), Colors.black, Colors.white);
+            final Color secondaryContrast = _contrast(Color(_appColor), Colors.black54, Colors.white70);
+            return AlertDialog(
+              backgroundColor: Color(_appColor),
+              title: Text("Управление на етикети", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: contrastColor)),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (allAvailableTags.isNotEmpty) ...[
+                      Text("Избери:", style: TextStyle(fontSize: 12, color: secondaryContrast)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 4, runSpacing: 4,
+                        children: allAvailableTags.map((tag) {
+                          final isSelected = _selectedTags.contains(tag);
+                          return FilterChip(
+                            visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            padding: EdgeInsets.zero,
+                            labelPadding: const EdgeInsets.symmetric(horizontal: 4.0),
+                            label: Text(tag, style: const TextStyle(fontSize: 10, color: Colors.black)),
+                            selected: isSelected,
+                            onSelected: (val) {
+                              setState(() { val ? _selectedTags.add(tag) : _selectedTags.remove(tag); });
+                              setModalState(() {});
+                            },
+                            showCheckmark: false,
+                            selectedColor: Colors.yellow[700],
+                            backgroundColor: Colors.cyan[200],
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            side: isSelected ? const BorderSide(color: Colors.cyan, width: 1) : BorderSide(color: Colors.cyan[400]!),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    Text("Нов етикет:", style: TextStyle(fontSize: 12, color: secondaryContrast)),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _tagController,
+                            style: TextStyle(color: contrastColor, fontSize: 13),
+                            decoration: InputDecoration(
+                              hintText: "Име...", 
+                              hintStyle: TextStyle(color: secondaryContrast.withValues(alpha: 0.4), fontSize: 13),
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                              enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: secondaryContrast.withValues(alpha: 0.2))),
+                            ),
+                            onSubmitted: (val) {
+                              if (val.trim().isNotEmpty && !_selectedTags.contains(val.trim())) {
+                                setState(() { _selectedTags.add(val.trim()); _newTagsInSession.add(val.trim()); });
                                 _tagController.clear();
-                              });
+                                setModalState(() {});
+                              }
+                            },
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.add, size: 20, color: contrastColor),
+                          onPressed: () {
+                            final val = _tagController.text;
+                            if (val.trim().isNotEmpty && !_selectedTags.contains(val.trim())) {
+                              setState(() { _selectedTags.add(val.trim()); _newTagsInSession.add(val.trim()); });
+                              _tagController.clear();
                               setModalState(() {});
                             }
                           },
                         ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.add_circle, color: Colors.blue),
-                        onPressed: () {
-                          if (_tagController.text.trim().isNotEmpty) {
-                            setState(() {
-                              String nt = _tagController.text.trim();
-                              if (!_selectedTags.contains(nt)) _selectedTags.add(nt);
-                              if (!widget.existingTags.contains(nt) && !_newTagsInSession.contains(nt)) _newTagsInSession.add(nt);
-                              _tagController.clear();
-                            });
-                            setModalState(() {});
-                          }
-                        },
-                      )
-                    ],
-                  ),
-                  const SizedBox(height: 30),
-                  SizedBox(width: double.infinity, child: ElevatedButton(onPressed: () => Navigator.pop(context), child: const Text("Готово"))),
-                  const SizedBox(height: 20),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text("Затвори", style: TextStyle(color: secondaryContrast)),
+                ),
+              ],
             );
-          }
+          },
         );
       },
     );
@@ -359,10 +381,10 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: Color(_appColor),
-          title: Text('Изтриване', style: TextStyle(color: Color(_appColor).computeLuminance() > 0.5 ? Colors.black : Colors.white)),
-          content: Text('Сигурни ли сте, че искате да изтриете тази бележка?', style: TextStyle(color: Color(_appColor).computeLuminance() > 0.5 ? Colors.black87 : Colors.white70)),
+          title: Text('Изтриване', style: TextStyle(color: _contrast(Color(_appColor), Colors.black, Colors.white))),
+          content: Text('Сигурни ли сте, че искате да изтриете тази бележка?', style: TextStyle(color: _contrast(Color(_appColor), Colors.black87, Colors.white70))),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Отказ', style: TextStyle(color: Color(_appColor).computeLuminance() > 0.5 ? Colors.black54 : Colors.white60))),
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Отказ', style: TextStyle(color: _contrast(Color(_appColor), Colors.black54, Colors.white60)))),
             TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Изтрий', style: TextStyle(color: Colors.red))),
           ],
         ),
@@ -409,14 +431,14 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
           context: context,
           builder: (context) => AlertDialog(
             backgroundColor: Color(_appColor),
-            title: Text('Отхвърляне на промените?', style: TextStyle(color: Color(_appColor).computeLuminance() > 0.5 ? Colors.black : Colors.white)),
-            content: Text('Имате незапазени промени. Сигурни ли сте, че искате да излезете?', style: TextStyle(color: Color(_appColor).computeLuminance() > 0.5 ? Colors.black87 : Colors.white70)),
+            title: Text('Отхвърляне на промените?', style: TextStyle(color: _contrast(Color(_appColor), Colors.black, Colors.white))),
+            content: Text('Имате незапазени промени. Сигурни ли сте, че искате да излезете?', style: TextStyle(color: _contrast(Color(_appColor), Colors.black87, Colors.white70))),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context, false), child: Text('Отказ', style: TextStyle(color: Color(_appColor).computeLuminance() > 0.5 ? Colors.black54 : Colors.white60))),
+              TextButton(onPressed: () => Navigator.pop(context, false), child: Text('Отказ', style: TextStyle(color: _contrast(Color(_appColor), Colors.black54, Colors.white60)))),
               TextButton(onPressed: () {
                 if (_sessionFileCreated && _imagePath != null && _isLocalCopy == 1) { try { File(_imagePath!).deleteSync(); } catch (e) { debugPrint("Грешка чистене при изход: $e"); } }
                 Navigator.pop(context, true);
-              }, child: const Text('Отхвърли', style: TextStyle(color: Colors.red))),
+              }, child: Text('Отхвърли', style: TextStyle(color: _contrast(Color(_appColor), Colors.black54, Colors.white60)))),
             ],
           ),
         ) ?? false;
@@ -565,7 +587,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
             ),
             FlyMenu(actions: [
               if (widget.item?['id'] != null) FlyAction(icon: Icons.delete, onTap: _deleteNote, label: "Изтрий"),
-              FlyAction(icon: Icons.arrow_back, onTap: () => Navigator.pop(context), label: "Назад"),
+              FlyAction(icon: Icons.arrow_back, onTap: () => Navigator.maybePop(context), label: "Назад"),
               if (_isEditing) FlyAction(icon: Icons.save, onTap: _save, label: "Запази"),
               if (!_isEditing) FlyAction(icon: Icons.edit, onTap: () => setState(() => _isEditing = true), label: "Редактирай"),
             ]),
@@ -613,7 +635,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
             children: [
               IconButton(icon: const Icon(Icons.photo_library), onPressed: _pickFromGallery, tooltip: 'Галерия'),
               IconButton(icon: const Icon(Icons.camera_alt), onPressed: _pickFromCamera, tooltip: 'Камера'),
-              IconButton(icon: const Icon(Icons.label_outline), onPressed: _showTagsSheet, tooltip: 'Етикети'),
+              IconButton(icon: const Icon(Icons.label_outline), onPressed: _showTagsDialog, tooltip: 'Етикети'),
               const SizedBox(width: 8),
               Row(
                 mainAxisSize: MainAxisSize.min,

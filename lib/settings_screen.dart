@@ -25,12 +25,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   double _fontSizeListContent = 13;
   double _fontSizeFormTitle = 18;
   double _fontSizeFormContent = 16;
+  int _maxTitleLength = 70;
   final TextEditingController _listLinesController = TextEditingController();
   final TextEditingController _gridLinesController = TextEditingController();
   final TextEditingController _listTitleSizeController = TextEditingController();
   final TextEditingController _listContentSizeController = TextEditingController();
   final TextEditingController _formTitleSizeController = TextEditingController();
   final TextEditingController _formContentSizeController = TextEditingController();
+  final TextEditingController _maxTitleLengthController = TextEditingController();
   final List<Color> _availableColors = [
     Colors.white, const Color(0xFF0A1931), const Color(0xFFFF5E00), 
     const Color(0xFFFFC93C), const Color(0xFF6A2C70), const Color(0xFFB83B5E), 
@@ -52,6 +54,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _listLinesController.dispose(); _gridLinesController.dispose();
     _listTitleSizeController.dispose(); _listContentSizeController.dispose();
     _formTitleSizeController.dispose(); _formContentSizeController.dispose();
+    _maxTitleLengthController.dispose();
     super.dispose();
   }
 
@@ -70,6 +73,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _fontSizeListContent = prefs.getDouble('list_content_size') ?? 13;
       _fontSizeFormTitle = prefs.getDouble('form_title_size') ?? 18;
       _fontSizeFormContent = prefs.getDouble('form_content_size') ?? 16;
+      _maxTitleLength = prefs.getInt('max_title_length') ?? 70;
       final customList = prefs.getStringList('custom_palette') ?? [];
       _customPalette = customList.map((s) => Color(int.parse(s))).toList();
       if (updateControllers) {
@@ -79,6 +83,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _listContentSizeController.text = _fontSizeListContent.toInt().toString();
         _formTitleSizeController.text = _fontSizeFormTitle.toInt().toString();
         _formContentSizeController.text = _fontSizeFormContent.toInt().toString();
+        _maxTitleLengthController.text = _maxTitleLength.toString();
       }
       if (!_availableColors.contains(Color(_appBgColor))) _availableColors.add(Color(_appBgColor));
       if (!_availableColors.contains(Color(_defaultNoteColor))) _availableColors.add(Color(_defaultNoteColor));
@@ -99,6 +104,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.setDouble('list_content_size', _fontSizeListContent);
     await prefs.setDouble('form_title_size', _fontSizeFormTitle);
     await prefs.setDouble('form_content_size', _fontSizeFormContent);
+    await prefs.setInt('max_title_length', _maxTitleLength);
     await prefs.setStringList('custom_palette', _customPalette.map((c) => c.toARGB32().toString()).toList());
     if (mounted) Navigator.pop(context);
   }
@@ -161,6 +167,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 value: _confirmDelete,
                 onChanged: (val) => setState(() => _confirmDelete = val),
               ),
+              Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
+              _buildSectionTitle('Споделяне'),
+              _buildNumberInput(title: 'Дължина на заглавие', controller: _maxTitleLengthController, min: 10, max: 500, onChanged: (val) => setState(() => _maxTitleLength = val)),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
               ListTile(leading: Icon(Icons.storage, size: 20, color: _textColor), title: Text('База данни', style: TextStyle(color: _textColor)), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DbViewerScreen()))),
               ListTile(leading: Icon(Icons.folder_open, size: 20, color: _textColor), title: Text('Файлове', style: TextStyle(color: _textColor)), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LocalFilesViewerScreen()))),
