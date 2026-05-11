@@ -148,7 +148,6 @@ class _MainListScreenState extends State<MainListScreen> {
     } else if (text.contains('http://') || text.contains('https://') || text.contains('www.')) {
       title = '🔗 ';
     }
-
     String finalContent = text;
     String finalTitle = title;
     final urlRegExp = RegExp(r'(https?:\/\/[^\s]+|www\.[^\s]+)');
@@ -156,14 +155,24 @@ class _MainListScreenState extends State<MainListScreen> {
     if (match != null) {
       String textPart = text.substring(0, match.start).trim();
       String urlPart = text.substring(match.start).trim();
-      if (textPart.isNotEmpty) {
-        finalTitle = '🔗 $textPart';
+      if (textPart.length > 70) {
+        finalTitle = title;
+        finalContent = '$textPart\n$urlPart';
+      } else if (textPart.isNotEmpty) {
+        finalTitle = '$title$textPart';
         finalContent = urlPart;
       } else {
         finalContent = urlPart;
       }
+    } else {
+      if (text.length > 70) {
+        finalTitle = title;
+        finalContent = text;
+      } else {
+        finalTitle = '$title$text';
+        finalContent = '';
+      }
     }
-
     _openNoteForm(initialData: { 'content': finalContent, 'title': finalTitle, 'imagePath': thumbPath, 'id': null, 'color': null, 'isCompleted': 0, 'tags': null });
   }
 
@@ -385,8 +394,10 @@ class _MainListScreenState extends State<MainListScreen> {
               Expanded(child: Text(item['title'] ?? 'Без заглавие', maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.bold, fontSize: _fontSizeTitle, color: textColor, decoration: isDone ? TextDecoration.lineThrough : null))),
             ],
           ),
-          const SizedBox(height: 4),
-          _buildContentWithLinks(item['content'] ?? '', secondaryTextColor, textColor, isGrid),
+          if ((item['content'] ?? '').toString().trim().isNotEmpty) ...[
+            const SizedBox(height: 4),
+            _buildContentWithLinks(item['content'] ?? '', secondaryTextColor, textColor, isGrid),
+          ],
           if (item['reminderTime'] != null && _showDate)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -460,7 +471,6 @@ class _MainListScreenState extends State<MainListScreen> {
     final urlRegExp = RegExp(r'(https?:\/\/[^\s]+|www\.[^\s]+)');
     final match = urlRegExp.firstMatch(content);
     final linkStyle = TextStyle(color: textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue, decoration: TextDecoration.none);
-    
     if (match != null) {
       final textPart = content.substring(0, match.start).trim();
       final urlPart = content.substring(match.start).trim();

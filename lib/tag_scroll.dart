@@ -31,12 +31,10 @@ class TagScrollFilter extends StatelessWidget {
       return a.compareTo(b);
     });
     final bool hasSelection = selectedTags.isNotEmpty || startDate != null;
-    
     String dateLabel = "дата";
     if (startDate != null && endDate != null) {
       dateLabel = "${startDate!.day}.${startDate!.month.toString().padLeft(2, '0')}-${endDate!.day}.${endDate!.month.toString().padLeft(2, '0')}";
     }
-
     return Container(
       height: 40,
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -83,7 +81,6 @@ class TagScrollFilter extends StatelessWidget {
                     ),
                   );
                 }
-
                 final tag = sortedTags[index - 1];
                 final isSelected = selectedTags.contains(tag);
                 return Padding(

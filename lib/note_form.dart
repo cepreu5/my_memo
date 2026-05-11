@@ -330,6 +330,18 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     _isEditing = false;
   }
 
+  void _moveFirstParagraphToTitle() {
+    final String content = _contentController.text.trim();
+    if (content.isEmpty) return;
+    final List<String> parts = content.split('\n');
+    final String firstPara = parts[0].trim();
+    if (firstPara.isEmpty) return;
+    setState(() {
+      _titleController.text = '${_titleController.text.trim()} $firstPara'.trim();
+      _contentController.text = parts.sublist(1).join('\n').trim();
+    });
+  }
+
   String? _extractYoutubeId(String url) {
     final regExp = RegExp(r'(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|shorts\/|.*[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})', caseSensitive: false);
     final match = regExp.firstMatch(url);
@@ -402,7 +414,6 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
               TextButton(onPressed: () => Navigator.pop(context, false), child: Text('Отказ', style: TextStyle(color: Color(_appColor).computeLuminance() > 0.5 ? Colors.black54 : Colors.white60))),
               TextButton(onPressed: () {
                 if (_sessionFileCreated && _imagePath != null && _isLocalCopy == 1) { try { File(_imagePath!).deleteSync(); } catch (e) { debugPrint("Грешка чистене при изход: $e"); } }
-
                 Navigator.pop(context, true);
               }, child: const Text('Отхвърли', style: TextStyle(color: Colors.red))),
             ],
@@ -478,6 +489,16 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                   onDeleted: _isEditing ? () => setState(() => _selectedTags.remove(tag)) : null,
                                   deleteIconColor: _textColor,
                                 )).toList()),
+                              ),
+                            if (_isEditing && _contentController.text.trim().isNotEmpty)
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: IconButton(
+                                  visualDensity: VisualDensity.compact,
+                                  onPressed: _moveFirstParagraphToTitle,
+                                  icon: Icon(Icons.arrow_upward, size: 16, color: _secondaryTextColor),
+                                  tooltip: 'Премести първия параграф към заглавието',
+                                ),
                               ),
                             const SizedBox(height: 12),
                             if (_isEditing)
