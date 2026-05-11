@@ -12,6 +12,11 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'color_picker_helper.dart';
 
+class NoteFormScreen extends StatefulWidget {
+  final Map<String, dynamic>? item;
+  final VoidCallback onSaved;
+  final List<String> existingTags;
+  final List<Map<String, dynamic>>? allNotes;
   final int? initialIndex;
   final bool startInEditMode;
   const NoteFormScreen({super.key, this.item, required this.onSaved, this.existingTags = const [], this.allNotes, this.initialIndex, this.startInEditMode = false});
