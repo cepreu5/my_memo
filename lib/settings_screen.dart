@@ -233,7 +233,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 scale: 0.8, // Намаляваме малко мащаба, за да пасне на компактния вид на полетата
                 child: Switch(
                   value: value,
-                  activeColor: Colors.blue,
+                  activeThumbColor: Colors.blue,
                   onChanged: onChanged,
                 ),
               ),

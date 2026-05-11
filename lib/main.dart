@@ -576,6 +576,7 @@ class _MainListScreenState extends State<MainListScreen> {
   }
 
   void _openNoteForm({Map<String, dynamic>? initialData, int? index}) async {
+    FocusScope.of(context).unfocus();
     if (!mounted) return;
     await Navigator.push(context, MaterialPageRoute(builder: (c) => NoteFormScreen(
       item: initialData, 
@@ -628,7 +629,7 @@ class _MainListScreenState extends State<MainListScreen> {
               hintText: 'Търсене...',
               hintStyle: TextStyle(color: appBarTextColor.withValues(alpha: 0.6)),
               prefixIcon: Icon(Icons.search, color: appBarTextColor.withValues(alpha: 0.6)),
-              suffixIcon: _searchController.text.isNotEmpty ? IconButton(icon: Icon(Icons.clear, size: 20, color: appBarTextColor), onPressed: () { _searchController.clear(); _filterItems(''); }) : null,
+              suffixIcon: _searchController.text.isNotEmpty ? IconButton(icon: Icon(Icons.clear, size: 20, color: appBarTextColor), onPressed: () { _searchController.clear(); _filterItems(''); FocusScope.of(context).unfocus(); }) : null,
               filled: true,
               fillColor: (isDarkBg ? Colors.white : Colors.black).withValues(alpha: 0.1),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
@@ -641,57 +642,28 @@ class _MainListScreenState extends State<MainListScreen> {
           IconButton(icon: Icon(_isGridView ? Icons.view_list : Icons.grid_view), onPressed: _toggleView),
         ],
       ),
-      body: Stack(
-        children: [
-          Column(
-            children: [
-              TagScrollFilter(
-                allTags: _allExistingTags.toList(),
-                selectedTags: _selectedFilterTags,
-                textColor: appBarTextColor,
-                startDate: _startDate,
-                endDate: _endDate,
-                filterColor: _filterColor,
-                tasksOnly: _filterTasksOnly,
-                reverseOrder: _reverseOrder,
-                onOpenFilterMenu: _showFilterDialog,
-                onSelectionChanged: (newList) {
-                  setState(() { _selectedFilterTags = newList; });
-                  _filterItems(_searchController.text);
-                },
-                onClearAll: () {
-                  setState(() {
-                    _selectedFilterTags.clear();
-                    _startDate = null;
-                    _endDate = null;
-                    _filterColor = null;
-                    _filterTasksOnly = false;
-                    _reverseOrder = false;
-                  });
-                  _filterItems(_searchController.text);
-                },
-              ),
-              Expanded(
-                child: _filteredItems.isEmpty
-                    ? Center(child: Text('Няма открити бележки.', style: TextStyle(color: appBarTextColor)))
-                    : _isGridView ? _buildGrid() : _buildList(),
-              ),
-            ],
-          ),
-          FlyMenu(
-            actions: [
-              if (_searchController.text.isNotEmpty)
-                FlyAction(
-                  icon: Icons.search_off,
-                  onTap: () { _searchController.clear(); _filterItems(''); },
-                  label: "Без търсене",
-                ),
-              FlyAction(icon: _isGridView ? Icons.view_list : Icons.grid_view, onTap: _toggleView, label: "Изглед"),
-              FlyAction(icon: Icons.filter_list, onTap: _showFilterDialog, label: "Филтри"),
-              if (_selectedFilterTags.isNotEmpty || _startDate != null || _filterColor != null || _filterTasksOnly || _reverseOrder)
-                FlyAction(
-                  icon: Icons.label_off_outlined,
-                  onTap: () {
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.translucent,
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                TagScrollFilter(
+                  allTags: _allExistingTags.toList(),
+                  selectedTags: _selectedFilterTags,
+                  textColor: appBarTextColor,
+                  startDate: _startDate,
+                  endDate: _endDate,
+                  filterColor: _filterColor,
+                  tasksOnly: _filterTasksOnly,
+                  reverseOrder: _reverseOrder,
+                  onOpenFilterMenu: _showFilterDialog,
+                  onSelectionChanged: (newList) {
+                    setState(() { _selectedFilterTags = newList; });
+                    _filterItems(_searchController.text);
+                  },
+                  onClearAll: () {
                     setState(() {
                       _selectedFilterTags.clear();
                       _startDate = null;
@@ -699,16 +671,51 @@ class _MainListScreenState extends State<MainListScreen> {
                       _filterColor = null;
                       _filterTasksOnly = false;
                       _reverseOrder = false;
+                      _sortById = false;
                     });
                     _filterItems(_searchController.text);
                   },
-                  label: "Без филтри",
                 ),
-              FlyAction(icon: Icons.add, onTap: () => _openNoteForm(), label: "Нова бележка"),
-              FlyAction(icon: Icons.settings, onTap: _goToSettings, label: "Настройки"),
-            ],
-          ),
-        ],
+                Expanded(
+                  child: _filteredItems.isEmpty
+                      ? Center(child: Text('Няма открити бележки.', style: TextStyle(color: appBarTextColor)))
+                      : _isGridView ? _buildGrid() : _buildList(),
+                ),
+              ],
+            ),
+            FlyMenu(
+              actions: [
+                FlyAction(icon: _isGridView ? Icons.view_list : Icons.grid_view, onTap: _toggleView, label: "Изглед"),
+                if (_searchController.text.isNotEmpty)
+                  FlyAction(
+                    icon: Icons.search_off,
+                    onTap: () { _searchController.clear(); _filterItems(''); FocusScope.of(context).unfocus(); },
+                    label: "Без търсене",
+                  ),
+                FlyAction(icon: Icons.filter_list, onTap: _showFilterDialog, label: "Филтри"),
+                if (_selectedFilterTags.isNotEmpty || _startDate != null || _filterColor != null || _filterTasksOnly || _reverseOrder)
+                  FlyAction(
+                    icon: Icons.label_off_outlined,
+                    onTap: () {
+                      setState(() {
+                        _selectedFilterTags.clear();
+                        _startDate = null;
+                        _endDate = null;
+                        _filterColor = null;
+                        _filterTasksOnly = false;
+                        _reverseOrder = false;
+                        _sortById = false;
+                      });
+                      _filterItems(_searchController.text);
+                    },
+                    label: "Без филтри",
+                  ),
+                FlyAction(icon: Icons.add, onTap: () => _openNoteForm(), label: "Нова бележка"),
+                FlyAction(icon: Icons.settings, onTap: _goToSettings, label: "Настройки"),
+              ],
+            ),
+          ],
+        ),
       ),
       floatingActionButton: FloatingActionButton(onPressed: () => _openNoteForm(), tooltip: 'Нова бележка', child: const Icon(Icons.add)),
     );
@@ -774,7 +781,7 @@ class _MainListScreenState extends State<MainListScreen> {
                 children: [
                   Icon(Icons.calendar_today, size: 12, color: secondaryTextColor),
                   const SizedBox(width: 4),
-                  Expanded(child: Text('${_formatDateTime(item['reminderTime'])}', style: TextStyle(fontSize: 10, color: secondaryTextColor))), // FontWeight.bold
+                  Expanded(child: Text(_formatDateTime(item['reminderTime']), style: TextStyle(fontSize: 10, color: secondaryTextColor))), // FontWeight.bold
                 ],
               ),
             ),

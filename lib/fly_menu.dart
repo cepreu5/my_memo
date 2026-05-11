@@ -126,10 +126,10 @@ class _FlyMenuState extends State<FlyMenu> with SingleTickerProviderStateMixin {
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
-        double startAngle = isLeft ? -0.4 * pi : 1.4 * pi;
-        double totalSweep = isLeft ? 0.8 * pi : -0.8 * pi;
-        double angleStep = widget.actions.length > 1 ? totalSweep / (widget.actions.length - 1) : 0;
-        double currentAngle = widget.actions.length > 1 ? startAngle + (index * angleStep) : (isLeft ? 0 : pi);
+        double fixedAngleStep = 0.16 * pi;
+        double currentSweep = (widget.actions.length - 1) * fixedAngleStep;
+        double startAngle = isLeft ? (-currentSweep / 2) : (pi + currentSweep / 2);
+        double currentAngle = startAngle + (index * (isLeft ? fixedAngleStep : -fixedAngleStep));
         double dist = _controller.value * 105;
         double x = cos(currentAngle) * dist;
         double y = sin(currentAngle) * dist;
