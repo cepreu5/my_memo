@@ -12,13 +12,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'color_picker_helper.dart';
 
-class NoteFormScreen extends StatefulWidget {
-  final Map<String, dynamic>? item;
-  final VoidCallback onSaved;
-  final List<String> existingTags;
-  final List<Map<String, dynamic>>? allNotes;
   final int? initialIndex;
-  const NoteFormScreen({super.key, this.item, required this.onSaved, this.existingTags = const [], this.allNotes, this.initialIndex});
+  final bool startInEditMode;
+  const NoteFormScreen({super.key, this.item, required this.onSaved, this.existingTags = const [], this.allNotes, this.initialIndex, this.startInEditMode = false});
   @override
   State<NoteFormScreen> createState() => _NoteFormScreenState();
 }
@@ -104,7 +100,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       if (widget.item!['color'] != null) { _selectedColor = Color(widget.item!['color']); } else { await _loadDefaultColor(); }
       _isCompleted = widget.item!['isCompleted'] ?? 0;
       _isTask = _isCompleted == 1 || _isCompleted == 2;
-      _isEditing = widget.item!['id'] == null;
+      _isEditing = widget.item!['id'] == null || widget.startInEditMode;
     } else { _isEditing = true; await _loadDefaultColor(); }
     if (!_noteColors.contains(_selectedColor)) { _noteColors.add(_selectedColor); }
     if (mounted) setState(() {});
@@ -528,7 +524,10 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       ) ?? false;
     }
     if (!confirm) return;
-    if (_isLocalCopy == 1 && _imagePath != null) { try { final f = File(_imagePath!); if (await f.exists()) await f.delete(); } catch (e) { debugPrint("Грешка изтриване файл: $e"); } }
+    if (_isLocalCopy == 1 && _imagePath != null) {
+      bool isUsed = await dbHelper.isImagePathUsed(_imagePath!, widget.item!['id']);
+      if (!isUsed) { try { final f = File(_imagePath!); if (await f.exists()) await f.delete(); } catch (e) { debugPrint("Грешка изтриване файл: $e"); } }
+    }
     if (!mounted) return;
     await dbHelper.deleteItem(widget.item!['id']);
     widget.onSaved();

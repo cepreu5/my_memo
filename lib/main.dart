@@ -575,7 +575,7 @@ class _MainListScreenState extends State<MainListScreen> {
     );
   }
 
-  void _openNoteForm({Map<String, dynamic>? initialData, int? index}) async {
+  void _openNoteForm({Map<String, dynamic>? initialData, int? index, bool startInEditMode = false}) async {
     FocusScope.of(context).unfocus();
     if (!mounted) return;
     await Navigator.push(context, MaterialPageRoute(builder: (c) => NoteFormScreen(
@@ -584,6 +584,7 @@ class _MainListScreenState extends State<MainListScreen> {
       existingTags: _allExistingTags.toList(),
       allNotes: _filteredItems,
       initialIndex: index,
+      startInEditMode: startInEditMode,
     )));
     if (mounted) _refreshItems();
   }
@@ -833,7 +834,10 @@ class _MainListScreenState extends State<MainListScreen> {
           )) ?? false;
         },
         onDismissed: (direction) async {
-          if (item['isLocalCopy'] == 1 && item['imagePath'] != null) { try { final f = File(item['imagePath']); if (await f.exists()) await f.delete(); } catch (e) { debugPrint("Грешка файл: $e"); } }
+          if (item['isLocalCopy'] == 1 && item['imagePath'] != null) {
+            bool isUsed = await dbHelper.isImagePathUsed(item['imagePath'], item['id']);
+            if (!isUsed) { try { final f = File(item['imagePath']); if (await f.exists()) await f.delete(); } catch (e) { debugPrint("Грешка файл: $e"); } }
+          }
           await dbHelper.deleteItem(item['id']);
           _refreshItems();
         },
@@ -848,6 +852,12 @@ class _MainListScreenState extends State<MainListScreen> {
             child: InkWell(
               borderRadius: BorderRadius.circular(8), 
               onTap: () => _openNoteForm(initialData: item, index: _filteredItems.indexOf(item)), 
+              onLongPress: () {
+                final copy = Map<String, dynamic>.from(item);
+                copy.remove('id');
+                copy.remove('tags');
+                _openNoteForm(initialData: copy, startInEditMode: true);
+              },
               child: content
             ),
           ),

@@ -85,6 +85,11 @@ class DatabaseHelper {
     final db = await database;
     return await db.delete('notes', where: 'id = ?', whereArgs: [id]);
   }
+  Future<bool> isImagePathUsed(String path, int excludingId) async {
+    final db = await database;
+    final List<Map<String, dynamic>> result = await db.query('notes', where: 'imagePath = ? AND id != ?', whereArgs: [path, excludingId]);
+    return result.isNotEmpty;
+  }
 }
 // Future<List<Map<String, dynamic>>> getItems() async {
 //   final db = await instance.database;
