@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
@@ -401,6 +402,94 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     final url = Uri.parse(link.url);
     if (await canLaunchUrl(url)) { await launchUrl(url, mode: LaunchMode.externalApplication); }
   }
+  void _calculateNote() {
+    final text = _contentController.text;
+    final selection = _contentController.selection;
+    String input = (selection.start != -1 && selection.end != -1 && selection.start != selection.end) ? text.substring(selection.start, selection.end) : text;
+    List<String> lines = input.split('\n');
+    List<String> parts = [];
+    RegExp listPrefix = RegExp(r'^(\d+\.\s+|[•\-\*]\s+|[☐☑]\s+)');
+    RegExp datePrefix = RegExp(r'^\d{1,2}[\./-]\d{1,2}([\./-]\d{2,4})?\s+');
+    RegExp onlyMath = RegExp(r'^[0-9+\-*/().\s,xXхХ]+$');
+    RegExp trailingExpr = RegExp(r'([+\-*/xXхХ]?\s*[0-9().,xXхХ+\-*/\s]*\d[0-9().,xXхХ+\-*/\s]*)$');
+    for (var line in lines) {
+      String processed = line.trim();
+      if (processed.isEmpty) continue;
+      processed = processed.replaceFirst(listPrefix, '');
+      processed = processed.replaceFirst(datePrefix, '');
+      if (processed.isEmpty) continue;
+      String matchStr = "";
+      if (onlyMath.hasMatch(processed)) { matchStr = processed; } 
+      else {
+        final m = trailingExpr.firstMatch(processed);
+        if (m != null) matchStr = m.group(0)!;
+      }
+      if (matchStr.trim().isNotEmpty) {
+        String clean = matchStr.replaceAll(',', '.').replaceAll(RegExp(r'[xXхХ]'), '*').trim();
+        if (parts.isNotEmpty && !clean.startsWith(RegExp(r'[+\-*/]'))) { parts.add('+'); }
+        parts.add(clean);
+      }
+    }
+    String expr = parts.join(' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (expr.isEmpty) return;
+    try {
+      double res = _evaluateExpression(expr);
+      String resStr = "= ${res.toStringAsFixed(2).replaceAll(RegExp(r'\.00$'), '')}";
+      Clipboard.setData(ClipboardData(text: resStr));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$expr $resStr (Копирано)"), duration: const Duration(seconds: 5)));
+    } catch (e) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Грешка при изчисление: $expr"))); }
+  }
+  double _evaluateExpression(String expr) {
+    final tokens = RegExp(r'\d+(\.\d+)?|[+\-*/()]').allMatches(expr.replaceAll(',', '.')).map((m) => m.group(0)!).toList();
+    if (tokens.isEmpty) return 0;
+    List<double> values = [];
+    List<String> ops = [];
+    int precedence(String op) { if (op == '+' || op == '-') return 1; if (op == '*' || op == '/') return 2; return 0; }
+    void applyOp() {
+      if (values.length < 2 || ops.isEmpty) return;
+      double b = values.removeLast();
+      double a = values.removeLast();
+      String op = ops.removeLast();
+      if (op == '+') values.add(a + b);
+      else if (op == '-') values.add(a - b);
+      else if (op == '*') values.add(a * b);
+      else if (op == '/') values.add(a / b);
+    }
+    for (var token in tokens) {
+      if (RegExp(r'^\d').hasMatch(token)) { values.add(double.parse(token)); }
+      else if (token == '(') { ops.add(token); }
+      else if (token == ')') { while (ops.isNotEmpty && ops.last != '(') applyOp(); if (ops.isNotEmpty) ops.removeLast(); }
+      else {
+        while (ops.isNotEmpty && precedence(ops.last) >= precedence(token)) applyOp();
+        ops.add(token);
+      }
+    }
+    while (ops.isNotEmpty) applyOp();
+    return values.isNotEmpty ? values.first : 0;
+  }
+  void _moveToLineStart() {
+    final text = _contentController.text;
+    final selection = _contentController.selection;
+    if (selection.start == -1) return;
+    int lineStart = text.lastIndexOf('\n', selection.start - 1) + 1;
+    _contentController.selection = TextSelection.collapsed(offset: lineStart);
+  }
+  void _moveToLineEndOrTab() {
+    final text = _contentController.text;
+    final selection = _contentController.selection;
+    if (selection.start == -1) return;
+    int lineEnd = text.indexOf('\n', selection.start);
+    if (lineEnd == -1) lineEnd = text.length;
+    if (selection.start < lineEnd) { _contentController.selection = TextSelection.collapsed(offset: lineEnd); } 
+    else {
+      int lineStart = text.lastIndexOf('\n', selection.start - 1) + 1;
+      int targetColumn = 30;
+      int spacesToAdd = targetColumn - (selection.start - lineStart);
+      if (spacesToAdd <= 0) spacesToAdd = 4;
+      String spaces = " " * spacesToAdd;
+      _contentController.value = TextEditingValue(text: text.replaceRange(selection.start, selection.start, spaces), selection: TextSelection.collapsed(offset: selection.start + spacesToAdd));
+    }
+  }
   void _toggleCheckboxLine(int index) {
     final lines = _contentController.text.split('\n');
     final line = lines[index];
@@ -500,6 +589,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
           foregroundColor: _textColor,
           title: Text(_isEditing ? (widget.item?['id'] == null ? 'Нова бележка' : 'Редактиране') : 'Преглед', style: TextStyle(color: _textColor)),
           actions: [
+            if (!_isEditing) IconButton(icon: const Icon(Icons.calculate_outlined), color: _textColor, onPressed: _calculateNote, tooltip: 'Калкулатор'),
             if (widget.item?['id'] != null) IconButton(icon: const Icon(Icons.delete_outline), color: _textColor, onPressed: _deleteNote),
             if (!_isEditing) IconButton(icon: const Icon(Icons.edit), color: _textColor, onPressed: () => setState(() => _isEditing = true))
             else IconButton(icon: const Icon(Icons.save), color: _textColor, onPressed: _save),
@@ -584,14 +674,26 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                               width: double.infinity,
                               decoration: BoxDecoration(color: _areaColor, borderRadius: BorderRadius.circular(8)),
                               child: _isEditing 
-                                ? TextField(
-                                    controller: _contentController, 
-                                    focusNode: _contentFocusNode, 
-                                    maxLines: null, 
-                                    style: TextStyle(fontSize: _fontSizeContent, color: _textColor), 
-                                    decoration: InputDecoration(hintText: 'Съдържание...', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor)), 
-                                    onSubmitted: (v) => _save(),
-                                    contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
+                                ? Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          IconButton(icon: const Icon(Icons.keyboard_arrow_left), onPressed: _moveToLineStart, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Начало на ред'),
+                                          const Spacer(),
+                                          IconButton(icon: const Icon(Icons.keyboard_arrow_right), onPressed: _moveToLineEndOrTab, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Край на ред / Таб'),
+                                        ],
+                                      ),
+                                      TextField(
+                                        controller: _contentController, 
+                                        focusNode: _contentFocusNode, 
+                                        maxLines: null, 
+                                        style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.2), 
+                                        decoration: InputDecoration(hintText: 'Съдържание...', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor)), 
+                                        onSubmitted: (v) => _save(),
+                                        contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
+                                      ),
+                                    ],
                                   )
                                 : Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -613,7 +715,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                                 Expanded(child: Linkify(
                                                   text: line.substring(checkMatch.end),
                                                   onOpen: _onLinkOpen,
-                                                  style: TextStyle(fontSize: _fontSizeContent, color: _textColor, decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.3),
+                                                  style: TextStyle(fontSize: _fontSizeContent, color: _textColor, decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.2),
                                                   linkStyle: TextStyle(color: _textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue),
                                                 )),
                                               ],
@@ -624,7 +726,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                       return Linkify(
                                         text: line,
                                         onOpen: _onLinkOpen,
-                                        style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.3),
+                                        style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.2),
                                         linkStyle: TextStyle(color: _textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue),
                                       );
                                     }).toList(),
@@ -664,6 +766,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
               if (widget.item?['id'] != null) FlyAction(icon: Icons.delete, onTap: _deleteNote, label: "Изтрий"),
               FlyAction(icon: Icons.arrow_back, onTap: () => Navigator.maybePop(context), label: "Назад"),
               if (_isEditing) FlyAction(icon: Icons.save, onTap: _save, label: "Запази"),
+              if (!_isEditing) FlyAction(icon: Icons.calculate_outlined, onTap: _calculateNote, label: "Калкулатор"),
               if (!_isEditing) FlyAction(icon: Icons.edit, onTap: () => setState(() => _isEditing = true), label: "Редактирай"),
             ]),
           ],
