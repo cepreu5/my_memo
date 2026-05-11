@@ -379,8 +379,8 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     List<String> lines = selectedPart.split('\n');
     RegExp bulletPattern = RegExp(r'^[•\-\*]\s+');
     RegExp numberPattern = RegExp(r'^\d+\.\s+');
-    RegExp checkPattern = RegExp(r'^[☐☑\[\s?[xXvV]?\s?\]]\s+');
-    RegExp anyPattern = RegExp(r'^([•\-\*]\s+|\d+\.\s+|[☐☑\[\s?[xXvV]?\s?\]]\s+)');
+    RegExp checkPattern = RegExp(r'^([☐☑]|\[\s?[xXvV]?\s?\])\s+');
+    RegExp anyPattern = RegExp(r'^([•\-\*]\s+|\d+\.\s+|([☐☑]|\[\s?[xXvV]?\s?\])\s+)');
     RegExp targetPattern = type == 'bullet' ? bulletPattern : (type == 'number' ? numberPattern : checkPattern);
     bool allHaveTarget = true;
     for (var line in lines) { if (line.trim().isNotEmpty && !targetPattern.hasMatch(line)) { allHaveTarget = false; break; } }
@@ -493,10 +493,10 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   void _toggleCheckboxLine(int index) {
     final lines = _contentController.text.split('\n');
     final line = lines[index];
-    final match = RegExp(r'^[☐☑\[\s?[xXvV]?\s?\]]\s+').firstMatch(line);
+    final match = RegExp(r'^([☐☑]|\[\s?[xXvV]?\s?\])\s+').firstMatch(line);
     if (match != null) {
       final isChecked = line.startsWith('☑') || match.group(0)!.contains(RegExp(r'[xv]'));
-      lines[index] = line.replaceFirst(RegExp(r'^[☐☑\[\s?[xXvV]?\s?\]]\s+'), isChecked ? '☐ ' : '☑ ');
+      lines[index] = line.replaceFirst(RegExp(r'^([☐☑]|\[\s?[xXvV]?\s?\])\s+'), isChecked ? '☐ ' : '☑ ');
       setState(() { _contentController.text = lines.join('\n'); });
       _save(closeAfterSave: false);
     }
@@ -700,13 +700,14 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                     children: _contentController.text.split('\n').asMap().entries.map((e) {
                                       final line = e.value;
                                       final index = e.key;
-                                      final checkMatch = RegExp(r'^[☐☑\[\s?[xXvV]?\s?\]]\s+').firstMatch(line);
+                                      final checkMatch = RegExp(r'^([☐☑]|\[\s?[xXvV]?\s?\])\s+').firstMatch(line);
                                       if (checkMatch != null) {
                                         final isChecked = line.startsWith('☑') || checkMatch.group(0)!.contains(RegExp(r'[xv]'));
                                         return InkWell(
                                           onTap: () => _toggleCheckboxLine(index),
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(vertical: 1),
+                                          child: Container(
+                                            width: double.infinity,
+                                            padding: const EdgeInsets.symmetric(vertical: 2),
                                             child: Row(
                                               crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
