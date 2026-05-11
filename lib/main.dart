@@ -59,6 +59,9 @@ class _MainListScreenState extends State<MainListScreen> {
   bool _showDate = false;
   DateTime? _startDate;
   DateTime? _endDate;
+  int? _filterColor;
+  bool _filterTasksOnly = false;
+  bool _reverseOrder = false;
   final TextEditingController _searchController = TextEditingController();
   late StreamSubscription _intentDataStreamSubscription;
 
@@ -222,8 +225,15 @@ class _MainListScreenState extends State<MainListScreen> {
             matchesDate = (checkDt.isAtSameMomentAs(start) || checkDt.isAfter(start)) && (checkDt.isAtSameMomentAs(end) || checkDt.isBefore(end));
           } else { matchesDate = false; }
         }
-        return matchesSearch && matchesTags && matchesDate;
+        bool matchesColor = _filterColor == null || item['color'] == _filterColor;
+        bool matchesTasks = !_filterTasksOnly || (item['isCompleted'] == 1 || item['isCompleted'] == 2);
+        return matchesSearch && matchesTags && matchesDate && matchesColor && matchesTasks;
       }).toList();
+      if (_reverseOrder) {
+        _filteredItems.sort((a, b) => (a['id'] ?? 0).compareTo(b['id'] ?? 0)); // Oldest first
+      } else {
+        _filteredItems.sort((a, b) => (b['id'] ?? 0).compareTo(a['id'] ?? 0)); // Newest first (default)
+      }
     });
   }
 
@@ -303,12 +313,38 @@ class _MainListScreenState extends State<MainListScreen> {
                 textColor: appBarTextColor,
                 startDate: _startDate,
                 endDate: _endDate,
+                filterColor: _filterColor,
+                tasksOnly: _filterTasksOnly,
+                reverseOrder: _reverseOrder,
                 onDateRangeChanged: (start, end) {
                   setState(() { _startDate = start; _endDate = end; });
                   _filterItems(_searchController.text);
                 },
+                onColorChanged: (color) {
+                  setState(() { _filterColor = color; });
+                  _filterItems(_searchController.text);
+                },
+                onTasksOnlyChanged: (val) {
+                  setState(() { _filterTasksOnly = val; });
+                  _filterItems(_searchController.text);
+                },
+                onReverseOrderChanged: (val) {
+                  setState(() { _reverseOrder = val; });
+                  _filterItems(_searchController.text);
+                },
                 onSelectionChanged: (newList) {
                   setState(() { _selectedFilterTags = newList; });
+                  _filterItems(_searchController.text);
+                },
+                onClearAll: () {
+                  setState(() {
+                    _selectedFilterTags.clear();
+                    _startDate = null;
+                    _endDate = null;
+                    _filterColor = null;
+                    _filterTasksOnly = false;
+                    _reverseOrder = false;
+                  });
                   _filterItems(_searchController.text);
                 },
               ),
@@ -321,7 +357,7 @@ class _MainListScreenState extends State<MainListScreen> {
           ),
           FlyMenu(
             actions: [
-              if (_selectedFilterTags.isNotEmpty || _startDate != null)
+              if (_selectedFilterTags.isNotEmpty || _startDate != null || _filterColor != null || _filterTasksOnly || _reverseOrder)
                 FlyAction(
                   icon: Icons.label_off_outlined,
                   onTap: () {
@@ -329,6 +365,9 @@ class _MainListScreenState extends State<MainListScreen> {
                       _selectedFilterTags.clear();
                       _startDate = null;
                       _endDate = null;
+                      _filterColor = null;
+                      _filterTasksOnly = false;
+                      _reverseOrder = false;
                     });
                     _filterItems(_searchController.text);
                   },

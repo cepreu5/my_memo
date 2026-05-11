@@ -56,6 +56,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   ];
   Color get _textColor => _selectedColor.computeLuminance() > 0.5 ? Colors.black87 : Colors.white;
   Color get _secondaryTextColor => _selectedColor.computeLuminance() > 0.5 ? Colors.black54 : Colors.white70;
+  Color get _areaColor => Color.lerp(_selectedColor, _selectedColor.computeLuminance() > 0.5 ? Colors.black : Colors.white, 0.05)!;
 
   @override
   void initState() {
@@ -467,20 +468,37 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                   ],
                                 ),
                               ),
-                            const SizedBox(height: 16),
-                            if (_isEditing)
-                              TextField(
-                                controller: _titleController, 
-                                maxLines: null, 
-                                style: TextStyle(fontSize: _fontSizeTitle, fontWeight: FontWeight.bold, color: _textColor), 
-                                decoration: InputDecoration(hintText: 'Заглавие', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor)),
-                                contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
-                              )
-                            else if (_titleController.text.isNotEmpty)
-                              Text(_titleController.text, style: TextStyle(fontSize: _fontSizeTitle, fontWeight: FontWeight.bold, color: _textColor)),
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                              decoration: BoxDecoration(color: _areaColor, borderRadius: BorderRadius.circular(8)),
+                              child: _isEditing 
+                                ? Stack(
+                                    alignment: Alignment.centerRight,
+                                    children: [
+                                      TextField(
+                                        controller: _titleController, 
+                                        maxLines: null, 
+                                        style: TextStyle(fontSize: _fontSizeTitle, fontWeight: FontWeight.bold, color: _textColor), 
+                                        decoration: InputDecoration(hintText: 'Заглавие', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor), contentPadding: const EdgeInsets.only(right: 32)),
+                                        contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
+                                      ),
+                                      if (_contentController.text.trim().isNotEmpty)
+                                        IconButton(
+                                          visualDensity: VisualDensity.compact,
+                                          onPressed: _moveFirstParagraphToTitle,
+                                          icon: Icon(Icons.arrow_upward, size: 16, color: _secondaryTextColor),
+                                          tooltip: 'Премести първия параграф към заглавието',
+                                        ),
+                                    ],
+                                  )
+                                : _titleController.text.isNotEmpty 
+                                    ? Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(_titleController.text, style: TextStyle(fontSize: _fontSizeTitle, fontWeight: FontWeight.bold, color: _textColor)))
+                                    : const SizedBox.shrink(),
+                            ),
                             if (_selectedTags.isNotEmpty)
                               Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                padding: const EdgeInsets.symmetric(vertical: 4.0),
                                 child: Wrap(spacing: 6, runSpacing: 0, children: _selectedTags.map((tag) => Chip(
                                   label: Text(tag, style: TextStyle(fontSize: 12, color: _textColor)),
                                   backgroundColor: _textColor.withValues(alpha: 0.1),
@@ -490,37 +508,31 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                   deleteIconColor: _textColor,
                                 )).toList()),
                               ),
-                            if (_isEditing && _contentController.text.trim().isNotEmpty)
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: IconButton(
-                                  visualDensity: VisualDensity.compact,
-                                  onPressed: _moveFirstParagraphToTitle,
-                                  icon: Icon(Icons.arrow_upward, size: 16, color: _secondaryTextColor),
-                                  tooltip: 'Премести първия параграф към заглавието',
-                                ),
-                              ),
-                            const SizedBox(height: 12),
-                            if (_isEditing)
-                              TextField(
-                                controller: _contentController, 
-                                focusNode: _contentFocusNode, 
-                                maxLines: null, 
-                                style: TextStyle(fontSize: _fontSizeContent, color: _textColor), 
-                                decoration: InputDecoration(hintText: 'Съдържание...', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor)), 
-                                onSubmitted: (v) => _save(),
-                                contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
-                              )
-                            else
-                              Linkify(
-                                text: _contentController.text,
-                                onOpen: (link) async {
-                                  final url = Uri.parse(link.url);
-                                  if (await canLaunchUrl(url)) { await launchUrl(url, mode: LaunchMode.externalApplication); }
-                                },
-                                style: TextStyle(fontSize: _fontSizeContent, color: _textColor),
-                                linkStyle: TextStyle(color: _textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue),
-                              ),
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              width: double.infinity,
+                              decoration: BoxDecoration(color: _areaColor, borderRadius: BorderRadius.circular(8)),
+                              child: _isEditing 
+                                ? TextField(
+                                    controller: _contentController, 
+                                    focusNode: _contentFocusNode, 
+                                    maxLines: null, 
+                                    style: TextStyle(fontSize: _fontSizeContent, color: _textColor), 
+                                    decoration: InputDecoration(hintText: 'Съдържание...', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor)), 
+                                    onSubmitted: (v) => _save(),
+                                    contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
+                                  )
+                                : Linkify(
+                                    text: _contentController.text,
+                                    onOpen: (link) async {
+                                      final url = Uri.parse(link.url);
+                                      if (await canLaunchUrl(url)) { await launchUrl(url, mode: LaunchMode.externalApplication); }
+                                    },
+                                    style: TextStyle(fontSize: _fontSizeContent, color: _textColor),
+                                    linkStyle: TextStyle(color: _textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue),
+                                  ),
+                            ),
                             if (_isEditing && _imagePath != null && _isLocalCopy == 0)
                               Padding(
                                 padding: const EdgeInsets.only(top: 10),
@@ -567,7 +579,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   Widget _buildBottomTools() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      decoration: BoxDecoration(color: _selectedColor, border: Border(top: BorderSide(color: _textColor.withValues(alpha: 0.1)))),
+      decoration: BoxDecoration(color: _areaColor, border: Border(top: BorderSide(color: _textColor.withValues(alpha: 0.1)))),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
