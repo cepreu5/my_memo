@@ -865,11 +865,91 @@ class _MainListScreenState extends State<MainListScreen> {
       ),
     );
   }
-
   Widget _buildContentWithLinks(String content, Color secondaryTextColor, Color textColor, bool isGrid) {
+    final linkStyle = TextStyle(color: textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue, decoration: TextDecoration.none);
+    final priceExp = RegExp(r'^(.*?)\s*\.{2,}\s*(\d+(?:[\.,]\d+)?)\s*$', multiLine: true);
+    if (isGrid && priceExp.hasMatch(content)) {
+      final lines = content.split('\n');
+      List<Widget> widgets = [];
+      int displayLines = 0;
+      int maxIntLen = 0;
+      int maxFracLen = 0;
+      for (var line in lines) {
+        Match? m = RegExp(r'^(.*?)\s*\.{2,}\s*(\d+(?:[\.,]\d+)?)\s*$').firstMatch(line);
+        if (m != null) {
+          String price = m.group(2)!;
+          String intP = price.contains('.') ? price.split('.')[0] : (price.contains(',') ? price.split(',')[0] : price);
+          String fracP = price.contains('.') ? ".${price.split('.')[1]}" : (price.contains(',') ? ",${price.split(',')[1]}" : "");
+          if (intP.length > maxIntLen) maxIntLen = intP.length;
+          if (fracP.length > maxFracLen) maxFracLen = fracP.length;
+        }
+      }
+      double intWidth = (maxIntLen * _fontSizeContent * 0.65) + 4;
+      double fracWidth = (maxFracLen * _fontSizeContent * 0.65) + 4;
+      for (var line in lines) {
+        if (displayLines >= _maxLinesGrid) break;
+        Match? m = RegExp(r'^(.*?)\s*\.{2,}\s*(\d+(?:[\.,]\d+)?)\s*$').firstMatch(line);
+        if (m != null) {
+          String prefix = m.group(1)!.trimRight();
+          String price = m.group(2)!;
+          String intP = price.contains('.') ? price.split('.')[0] : (price.contains(',') ? price.split(',')[0] : price);
+          String fracP = price.contains('.') ? ".${price.split('.')[1]}" : (price.contains(',') ? ",${price.split(',')[1]}" : "");
+          String leaderText = prefix.isEmpty ? "." * 150 : "$prefix ${'.' * 150}";
+          widgets.add(Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Text(
+                  leaderText,
+                  maxLines: 1,
+                  overflow: TextOverflow.clip,
+                  softWrap: false,
+                  style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor),
+                ),
+              ),
+              const SizedBox(width: 4),
+              SizedBox(
+                width: intWidth,
+                child: Text(
+                  intP,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor),
+                ),
+              ),
+              if (maxFracLen > 0)
+                SizedBox(
+                  width: fracWidth,
+                  child: Text(
+                    fracP,
+                    textAlign: TextAlign.left,
+                    style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor),
+                  ),
+                ),
+            ],
+          ));
+          displayLines++;
+        } else {
+          widgets.add(Linkify(
+            text: line,
+            onOpen: (link) async {
+              final url = Uri.parse(link.url);
+              if (await canLaunchUrl(url)) { await launchUrl(url, mode: LaunchMode.externalApplication); }
+            },
+            maxLines: _maxLinesGrid - displayLines > 0 ? _maxLinesGrid - displayLines : 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor),
+            linkStyle: linkStyle,
+          ));
+          displayLines++;
+        }
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: widgets,
+      );
+    }
     final urlRegExp = RegExp(r'(https?:\/\/[^\s]+|www\.[^\s]+)');
     final match = urlRegExp.firstMatch(content);
-    final linkStyle = TextStyle(color: textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue, decoration: TextDecoration.none);
     if (match != null) {
       final textPart = content.substring(0, match.start).trim();
       final urlPart = content.substring(match.start).trim();

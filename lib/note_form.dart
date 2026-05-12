@@ -45,6 +45,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   int? _currentIndex;
   List<Map<String, dynamic>> _allNotes = [];
   bool _isTask = false;
+  int _alignmentColumn = 30;
   int _isCompleted = 0;
   int _appColor = const Color(0xFFFF5E00).toARGB32();
   final List<Color> _noteColors = [
@@ -88,6 +89,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       _fontSizeTitle = prefs.getDouble('form_title_size') ?? 18;
       _fontSizeContent = prefs.getDouble('form_content_size') ?? 16;
       _appColor = prefs.getInt('bg_color') ?? const Color(0xFFFF5E00).toARGB32();
+      _alignmentColumn = prefs.getInt('alignment_column') ?? 30;
       final customList = prefs.getStringList('custom_palette') ?? [];
       final customColors = customList.map((s) => Color(int.parse(s))).toList();
       for (var c in customColors) { if (!_noteColors.contains(c)) _noteColors.add(c); }
@@ -296,8 +298,62 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     } catch (e) { debugPrint("Грешка копиране: $e"); }
     return null;
   }
+  void _formatPricesBeforeSave() {
+    String text = _contentController.text;
+    if (text.isEmpty) return;
+    List<String> lines = text.split('\n');
+    RegExp exp = RegExp(r'^(.*?)\s*\.{2,}\s*(\d+(?:[\.,]\d+)?)\s*$');
+    int maxIntLen = 0;
+    List<int> matchingIndices = [];
+    List<Match> matches = [];
+    for (int i = 0; i < lines.length; i++) {
+      Match? m = exp.firstMatch(lines[i]);
+      if (m != null) {
+        matchingIndices.add(i);
+        matches.add(m);
+        String numStr = m.group(2)!;
+        String intPart = numStr.contains('.') ? numStr.split('.')[0] : (numStr.contains(',') ? numStr.split(',')[0] : numStr);
+        if (intPart.length > maxIntLen) maxIntLen = intPart.length;
+      }
+    }
+    if (matchingIndices.isEmpty) return;
+    int minBaseCol = _alignmentColumn;
+    for (int i = 0; i < matchingIndices.length; i++) {
+      Match m = matches[i];
+      String prefix = m.group(1)!;
+      String numStr = m.group(2)!;
+      String intPart = numStr.contains('.') ? numStr.split('.')[0] : (numStr.contains(',') ? numStr.split(',')[0] : numStr);
+      int requiredBase = prefix.length + intPart.length - maxIntLen + 4;
+      if (requiredBase > minBaseCol) minBaseCol = requiredBase;
+    }
+    int baseCol = minBaseCol;
+    bool changed = false;
+    for (int i = 0; i < matchingIndices.length; i++) {
+      int lineIdx = matchingIndices[i];
+      Match m = matches[i];
+      String prefix = m.group(1)!;
+      String numStr = m.group(2)!;
+      String intPart = numStr.contains('.') ? numStr.split('.')[0] : (numStr.contains(',') ? numStr.split(',')[0] : numStr);
+      int numberStartCol = baseCol + (maxIntLen - intPart.length);
+      int dotsCount = numberStartCol - prefix.length - 2;
+      if (dotsCount < 2) dotsCount = 2;
+      String newPrefix = prefix.isEmpty ? "" : "$prefix ";
+      String filler = "." * dotsCount;
+      String newLine = "$newPrefix$filler $numStr";
+      if (lines[lineIdx] != newLine) {
+        lines[lineIdx] = newLine;
+        changed = true;
+      }
+    }
+    if (changed) {
+      int cursor = _contentController.selection.start;
+      String newText = lines.join('\n');
+      _contentController.value = TextEditingValue(text: newText, selection: cursor >= 0 && cursor <= newText.length ? TextSelection.collapsed(offset: cursor) : TextSelection.collapsed(offset: newText.length));
+    }
+  }
 
   Future<void> _save({bool closeAfterSave = true}) async {
+    _formatPricesBeforeSave();
     _reminderTime = DateTime.now(); // Автоматично обновяваме датата при всяко записване
     String? finalPath = _imagePath;
     int finalIsLocal = _isLocalCopy;
@@ -484,11 +540,10 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     if (selection.start < lineEnd) { _contentController.selection = TextSelection.collapsed(offset: lineEnd); } 
     else {
       int lineStart = text.lastIndexOf('\n', selection.start - 1) + 1;
-      int targetColumn = 30;
-      int spacesToAdd = targetColumn - (selection.start - lineStart);
-      if (spacesToAdd <= 0) spacesToAdd = 4;
-      String spaces = " " * spacesToAdd;
-      _contentController.value = TextEditingValue(text: text.replaceRange(selection.start, selection.start, spaces), selection: TextSelection.collapsed(offset: selection.start + spacesToAdd));
+      int currentColumn = selection.start - lineStart;
+      int dotsCount = _alignmentColumn - currentColumn - 2;
+      String filler = (dotsCount > 0) ? " ${"." * dotsCount} " : "    ";
+      _contentController.value = TextEditingValue(text: text.replaceRange(selection.start, selection.start, filler), selection: TextSelection.collapsed(offset: selection.start + filler.length));
     }
   }
   void _toggleCheckboxLine(int index) {

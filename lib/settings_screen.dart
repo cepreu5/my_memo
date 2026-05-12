@@ -26,13 +26,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   double _fontSizeFormTitle = 18;
   double _fontSizeFormContent = 16;
   int _maxTitleLength = 70;
+  int _alignmentColumn = 30;
   final TextEditingController _listLinesController = TextEditingController();
   final TextEditingController _gridLinesController = TextEditingController();
   final TextEditingController _listTitleSizeController = TextEditingController();
   final TextEditingController _listContentSizeController = TextEditingController();
-  final TextEditingController _formTitleSizeController = TextEditingController();
   final TextEditingController _formContentSizeController = TextEditingController();
   final TextEditingController _maxTitleLengthController = TextEditingController();
+  final TextEditingController _alignmentColumnController = TextEditingController();
   final List<Color> _availableColors = [
     Colors.white, const Color(0xFF0A1931), const Color(0xFFFF5E00), 
     const Color(0xFFFFC93C), const Color(0xFF6A2C70), const Color(0xFFB83B5E), 
@@ -54,7 +55,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _listLinesController.dispose(); _gridLinesController.dispose();
     _listTitleSizeController.dispose(); _listContentSizeController.dispose();
     _formTitleSizeController.dispose(); _formContentSizeController.dispose();
-    _maxTitleLengthController.dispose();
+    _maxTitleLengthController.dispose(); _alignmentColumnController.dispose();
     super.dispose();
   }
 
@@ -74,6 +75,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _fontSizeFormTitle = prefs.getDouble('form_title_size') ?? 18;
       _fontSizeFormContent = prefs.getDouble('form_content_size') ?? 16;
       _maxTitleLength = prefs.getInt('max_title_length') ?? 70;
+      _alignmentColumn = prefs.getInt('alignment_column') ?? 30;
       final customList = prefs.getStringList('custom_palette') ?? [];
       _customPalette = customList.map((s) => Color(int.parse(s))).toList();
       if (updateControllers) {
@@ -84,6 +86,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _formTitleSizeController.text = _fontSizeFormTitle.toInt().toString();
         _formContentSizeController.text = _fontSizeFormContent.toInt().toString();
         _maxTitleLengthController.text = _maxTitleLength.toString();
+        _alignmentColumnController.text = _alignmentColumn.toString();
       }
       if (!_availableColors.contains(Color(_appBgColor))) _availableColors.add(Color(_appBgColor));
       if (!_availableColors.contains(Color(_defaultNoteColor))) _availableColors.add(Color(_defaultNoteColor));
@@ -105,6 +108,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.setDouble('form_title_size', _fontSizeFormTitle);
     await prefs.setDouble('form_content_size', _fontSizeFormContent);
     await prefs.setInt('max_title_length', _maxTitleLength);
+    await prefs.setInt('alignment_column', _alignmentColumn);
     await prefs.setStringList('custom_palette', _customPalette.map((c) => c.toARGB32().toString()).toList());
     if (mounted) Navigator.pop(context);
   }
@@ -153,6 +157,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _buildSectionTitle('Редактор'),
               _buildNumberInput(title: 'Размер шрифт заглавие', controller: _formTitleSizeController, min: 14, max: 40, onChanged: (val) => setState(() => _fontSizeFormTitle = val.toDouble())),
               _buildNumberInput(title: 'Размер шрифт текст', controller: _formContentSizeController, min: 10, max: 35, onChanged: (val) => setState(() => _fontSizeFormContent = val.toDouble())),
+              _buildNumberInput(title: 'Подравняване в колона', controller: _alignmentColumnController, min: 10, max: 100, onChanged: (val) => setState(() => _alignmentColumn = val)),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
               _buildSectionTitle('Филтриране по етикети'),
               _buildSwitchInput(
