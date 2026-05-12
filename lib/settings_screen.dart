@@ -31,6 +31,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _gridLinesController = TextEditingController();
   final TextEditingController _listTitleSizeController = TextEditingController();
   final TextEditingController _listContentSizeController = TextEditingController();
+  final TextEditingController _formTitleSizeController = TextEditingController();
   final TextEditingController _formContentSizeController = TextEditingController();
   final TextEditingController _maxTitleLengthController = TextEditingController();
   final TextEditingController _alignmentColumnController = TextEditingController();
