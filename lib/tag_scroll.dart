@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-class TagScrollFilter extends StatelessWidget {
+class TagScrollFilter extends StatefulWidget {
   final List<String> allTags;
   final List<String> selectedTags;
   final Color textColor;
@@ -29,32 +29,48 @@ class TagScrollFilter extends StatelessWidget {
   });
 
   @override
+  State<TagScrollFilter> createState() => _TagScrollFilterState();
+}
+
+class _TagScrollFilterState extends State<TagScrollFilter> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final List<String> sortedTags = List.from(allTags);
+    final List<String> sortedTags = List.from(widget.allTags);
     sortedTags.sort((a, b) {
-      bool aSelected = selectedTags.contains(a);
-      bool bSelected = selectedTags.contains(b);
+      bool aSelected = widget.selectedTags.contains(a);
+      bool bSelected = widget.selectedTags.contains(b);
       if (aSelected && !bSelected) return -1;
       if (!aSelected && bSelected) return 1;
       return a.compareTo(b);
     });
-    final bool hasSelection = selectedTags.isNotEmpty || startDate != null || filterColor != null || tasksOnly || reverseOrder;
-    
+    final bool hasSelection = widget.selectedTags.isNotEmpty || widget.startDate != null || widget.filterColor != null || widget.tasksOnly || widget.reverseOrder;
     return Container(
       height: 40,
       padding: const EdgeInsets.symmetric(vertical: 4),
-      decoration: BoxDecoration(border: Border(top: BorderSide(color: textColor.withValues(alpha: 0.1), width: 0.5), bottom: BorderSide(color: textColor.withValues(alpha: 0.1), width: 0.5))),
+      decoration: BoxDecoration(border: Border(top: BorderSide(color: widget.textColor.withValues(alpha: 0.1), width: 0.5), bottom: BorderSide(color: widget.textColor.withValues(alpha: 0.1), width: 0.5))),
       child: Row(
         children: [
           GestureDetector(
-            onTap: hasSelection ? onClearAll : null,
+            onTap: hasSelection ? () {
+              widget.onClearAll();
+              _scrollController.animateTo(0.0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+            } : null,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10.0),
-              child: Icon(hasSelection ? Icons.label_off_outlined : Icons.label_outline, size: 20, color: hasSelection ? Colors.redAccent : textColor.withValues(alpha: 0.6)),
+              child: Icon(hasSelection ? Icons.label_off_outlined : Icons.label_outline, size: 20, color: hasSelection ? Colors.redAccent : widget.textColor.withValues(alpha: 0.6)),
             ),
           ),
           Expanded(
             child: ListView.builder(
+              controller: _scrollController,
               scrollDirection: Axis.horizontal,
               itemCount: sortedTags.length + 1,
               itemBuilder: (context, index) {
@@ -62,32 +78,33 @@ class TagScrollFilter extends StatelessWidget {
                   return Padding(
                     padding: const EdgeInsets.only(right: 4.0),
                     child: GestureDetector(
-                      onTap: onOpenFilterMenu,
+                      onTap: widget.onOpenFilterMenu,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        constraints: const BoxConstraints(minHeight: 20, maxHeight: 20),
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        constraints: const BoxConstraints(minWidth: 20, minHeight: 20, maxHeight: 20),
                         decoration: BoxDecoration(
                           color: Colors.grey[200],
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(4),
                           border: Border.all(color: Colors.grey[300]!),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            if (startDate != null && endDate != null)
-                              Text("${startDate!.day}.${startDate!.month}-${endDate!.day}.${endDate!.month}", style: const TextStyle(fontSize: 10, color: Colors.black))
-                            else if (filterColor == null && !tasksOnly && !reverseOrder)
+                            if (widget.startDate != null && widget.endDate != null)
+                              Text("${widget.startDate!.day}.${widget.startDate!.month}-${widget.endDate!.day}.${widget.endDate!.month}", style: const TextStyle(fontSize: 10, color: Colors.black))
+                            else if (widget.filterColor == null && !widget.tasksOnly && !widget.reverseOrder)
                                const Icon(Icons.filter_list, size: 12, color: Colors.black87)
                             else ...[
-                                if (filterColor != null) ...[
-                                   Container(width: 10, height: 10, decoration: BoxDecoration(color: Color(filterColor!), shape: BoxShape.circle, border: Border.all(color: Colors.black26, width: 0.5))),
+                                if (widget.filterColor != null) ...[
+                                   Container(width: 10, height: 10, decoration: BoxDecoration(color: Color(widget.filterColor!), shape: BoxShape.circle, border: Border.all(color: Colors.black26, width: 0.5))),
                                    const SizedBox(width: 2),
                                 ],
-                                if (tasksOnly) ...[
+                                if (widget.tasksOnly) ...[
                                    const Icon(Icons.task_alt, size: 12, color: Colors.black87),
                                    const SizedBox(width: 2),
                                 ],
-                                if (reverseOrder) ...[
+                                if (widget.reverseOrder) ...[
                                    const Icon(Icons.sort, size: 12, color: Colors.black87),
                                 ],
                             ],
@@ -99,7 +116,7 @@ class TagScrollFilter extends StatelessWidget {
                   );
                 }
                 final tag = sortedTags[index - 1];
-                final isSelected = selectedTags.contains(tag);
+                final isSelected = widget.selectedTags.contains(tag);
                 return Padding(
                   padding: const EdgeInsets.only(right: 4.0),
                   child: FilterChip(
@@ -110,9 +127,10 @@ class TagScrollFilter extends StatelessWidget {
                     label: Text(tag, style: TextStyle(fontSize: 10, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: Colors.black)),
                     selected: isSelected,
                     onSelected: (selected) {
-                      List<String> newList = List.from(selectedTags);
+                      List<String> newList = List.from(widget.selectedTags);
                       if (selected) { newList.add(tag); } else { newList.remove(tag); }
-                      onSelectionChanged(newList);
+                      widget.onSelectionChanged(newList);
+                      _scrollController.animateTo(0.0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
                     },
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     showCheckmark: false,

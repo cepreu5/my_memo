@@ -295,24 +295,12 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       final String newPath = p.join(directory.path, fileName);
       await File(originalPath).copy(newPath);
       return newPath;
-    } catch (e) { debugPrint("Грешка копиране: $e"); }
-    return null;
-  }
-  double _getTextWidth(String text) {
-    final tp = TextPainter(
-      text: TextSpan(text: text, style: TextStyle(fontSize: _fontSizeContent)),
-      maxLines: 1,
-      textDirection: TextDirection.ltr,
-    )..layout();
-    return tp.width;
-  }
-
   void _formatPricesBeforeSave() {
     String text = _contentController.text;
     if (text.isEmpty) return;
     List<String> lines = text.split('\n');
     RegExp exp = RegExp(r'^(.*?)\s*\.{2,}\s*(\d+(?:[\.,]\d+)?)\s*$');
-    
+    int maxIntLen = 0;
     List<int> matchingIndices = [];
     List<Match> matches = [];
     for (int i = 0; i < lines.length; i++) {
@@ -320,29 +308,22 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       if (m != null) {
         matchingIndices.add(i);
         matches.add(m);
+        String numStr = m.group(2)!;
+        String intPart = numStr.contains('.') ? numStr.split('.')[0] : (numStr.contains(',') ? numStr.split(',')[0] : numStr);
+        if (intPart.length > maxIntLen) maxIntLen = intPart.length;
       }
     }
     if (matchingIndices.isEmpty) return;
-    
-    double dotWidth = _getTextWidth(".");
-    double spaceWidth = _getTextWidth(" ");
-    double minTargetWidth = _alignmentColumn * _fontSizeContent * 0.6;
-    
+    int minBaseCol = _alignmentColumn;
     for (int i = 0; i < matchingIndices.length; i++) {
-      String prefix = matches[i].group(1)!.trimRight();
-      double prefixWidth = _getTextWidth(prefix);
-      double requiredWidth = prefixWidth + spaceWidth * 2 + dotWidth * 2;
-      if (requiredWidth > minTargetWidth) minTargetWidth = requiredWidth;
-    }
-    
-    double maxIntPartWidth = 0;
-    for (int i = 0; i < matchingIndices.length; i++) {
-      String numStr = matches[i].group(2)!;
+      Match m = matches[i];
+      String prefix = m.group(1)!.trimRight();
+      String numStr = m.group(2)!;
       String intPart = numStr.contains('.') ? numStr.split('.')[0] : (numStr.contains(',') ? numStr.split(',')[0] : numStr);
-      double intWidth = _getTextWidth(intPart);
-      if (intWidth > maxIntPartWidth) maxIntPartWidth = intWidth;
+      int requiredBase = prefix.length + intPart.length - maxIntLen + 4;
+      if (requiredBase > minBaseCol) minBaseCol = requiredBase;
     }
-    
+    int baseCol = minBaseCol;
     bool changed = false;
     for (int i = 0; i < matchingIndices.length; i++) {
       int lineIdx = matchingIndices[i];
@@ -350,15 +331,9 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       String prefix = m.group(1)!.trimRight();
       String numStr = m.group(2)!;
       String intPart = numStr.contains('.') ? numStr.split('.')[0] : (numStr.contains(',') ? numStr.split(',')[0] : numStr);
-      
-      double prefixWidth = _getTextWidth(prefix);
-      double intWidth = _getTextWidth(intPart);
-      
-      double numberStartTarget = minTargetWidth + (maxIntPartWidth - intWidth);
-      double dotsWidthNeeded = numberStartTarget - prefixWidth - spaceWidth * 2;
-      int dotsCount = (dotsWidthNeeded / dotWidth).round();
+      int numberStartCol = baseCol + (maxIntLen - intPart.length);
+      int dotsCount = numberStartCol - prefix.length - 2;
       if (dotsCount < 2) dotsCount = 2;
-      
       String newPrefix = prefix.isEmpty ? "" : "$prefix ";
       String filler = "." * dotsCount;
       String newLine = "$newPrefix$filler $numStr";
@@ -584,13 +559,8 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     } else {
       int lineStart = text.lastIndexOf('\n', selection.start - 1) + 1;
       String currentLineText = text.substring(lineStart, selection.start).trimRight();
-      
-      double targetWidth = _alignmentColumn * _fontSizeContent * 0.6;
-      double currentWidth = _getTextWidth(currentLineText);
-      double dotWidth = _getTextWidth(".");
-      double spaceWidth = _getTextWidth(" ");
-      
-      int dotsCount = ((targetWidth - currentWidth - spaceWidth * 2) / dotWidth).round();
+      int currentColumn = currentLineText.length;
+      int dotsCount = _alignmentColumn - currentColumn - 2;
       if (dotsCount < 2) dotsCount = 2;
       
       String newPrefix = currentLineText.isEmpty ? "" : "$currentLineText ";
@@ -843,6 +813,14 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                           ),
                                         );
                                       }
+                                      if (RegExp(r'^(.*?)\s*\.{2,}\s*(\d+(?:[\.,]\d+)?)\s*$').hasMatch(line)) {
+                                        return SelectableLinkify(
+                                          text: line,
+                                          onOpen: _onLinkOpen,
+                                          style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.2, fontFamily: 'monospace'),
+                                          linkStyle: TextStyle(color: _textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue, fontFamily: 'monospace'),
+                                        );
+                                      }
                                       return SelectableLinkify(
                                         text: line,
                                         onOpen: _onLinkOpen,
@@ -999,23 +977,50 @@ class MathHighlightController extends TextEditingController {
   }
   @override
   TextSpan buildTextSpan({required BuildContext context, TextStyle? style, required bool withComposing}) {
-    if (highlights.isEmpty) return TextSpan(style: style, text: text);
     List<InlineSpan> spans = [];
-    int lastEnd = 0;
-    List<TextRange> sorted = List.from(highlights)..sort((a, b) => a.start.compareTo(b.start));
-    for (var range in sorted) {
-      if (range.start < lastEnd) continue;
-      if (range.start > text.length) break;
-      int end = range.end > text.length ? text.length : range.end;
-      if (range.start > lastEnd) {
-        spans.add(TextSpan(text: text.substring(lastEnd, range.start), style: style));
+    int currentOffset = 0;
+    
+    List<String> lines = text.split('\n');
+    RegExp priceExp = RegExp(r'^(.*?)\s*\.{2,}\s*(\d+(?:[\.,]\d+)?)\s*$');
+    
+    for (int i = 0; i < lines.length; i++) {
+      String line = lines[i];
+      TextStyle? lineStyle = style;
+      if (priceExp.hasMatch(line)) {
+        lineStyle = style?.copyWith(fontFamily: 'monospace');
       }
-      spans.add(TextSpan(text: text.substring(range.start, end), style: style?.copyWith(backgroundColor: highlightBgColor, color: highlightTextColor)));
-      lastEnd = end;
+      
+      int lineStart = currentOffset;
+      int lineEnd = currentOffset + line.length;
+      
+      List<TextRange> lineHighlights = highlights.where((r) => r.start < lineEnd && r.end > lineStart).toList();
+      lineHighlights.sort((a, b) => a.start.compareTo(b.start));
+      
+      if (lineHighlights.isEmpty) {
+        spans.add(TextSpan(text: line, style: lineStyle));
+      } else {
+        int lastEnd = lineStart;
+        for (var range in lineHighlights) {
+          int start = range.start < lineStart ? lineStart : range.start;
+          int end = range.end > lineEnd ? lineEnd : range.end;
+          
+          if (start > lastEnd) {
+            spans.add(TextSpan(text: text.substring(lastEnd, start), style: lineStyle));
+          }
+          spans.add(TextSpan(text: text.substring(start, end), style: lineStyle?.copyWith(backgroundColor: highlightBgColor, color: highlightTextColor)));
+          lastEnd = end;
+        }
+        if (lastEnd < lineEnd) {
+          spans.add(TextSpan(text: text.substring(lastEnd, lineEnd), style: lineStyle));
+        }
+      }
+      
+      currentOffset += line.length + 1;
+      if (i < lines.length - 1) {
+        spans.add(TextSpan(text: '\n', style: lineStyle));
+      }
     }
-    if (lastEnd < text.length) {
-      spans.add(TextSpan(text: text.substring(lastEnd), style: style));
-    }
+    
     return TextSpan(style: style, children: spans);
   }
 }

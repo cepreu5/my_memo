@@ -865,29 +865,35 @@ class _MainListScreenState extends State<MainListScreen> {
       ),
     );
   }
+
   Widget _buildContentWithLinks(String content, Color secondaryTextColor, Color textColor, bool isGrid) {
     final linkStyle = TextStyle(color: textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue, decoration: TextDecoration.none);
     final priceExp = RegExp(r'^(.*?)\s*\.{2,}\s*(\d+(?:[\.,]\d+)?)\s*$', multiLine: true);
-    if (isGrid && priceExp.hasMatch(content)) {
+    if (priceExp.hasMatch(content)) {
       final lines = content.split('\n');
       List<Widget> widgets = [];
       int displayLines = 0;
-      int maxIntLen = 0;
-      int maxFracLen = 0;
+      double maxIntWidth = 0;
+      double maxFracWidth = 0;
+      int maxAllowedLines = isGrid ? _maxLinesGrid : _maxLinesList;
+      
       for (var line in lines) {
         Match? m = RegExp(r'^(.*?)\s*\.{2,}\s*(\d+(?:[\.,]\d+)?)\s*$').firstMatch(line);
         if (m != null) {
           String price = m.group(2)!;
           String intP = price.contains('.') ? price.split('.')[0] : (price.contains(',') ? price.split(',')[0] : price);
           String fracP = price.contains('.') ? ".${price.split('.')[1]}" : (price.contains(',') ? ",${price.split(',')[1]}" : "");
-          if (intP.length > maxIntLen) maxIntLen = intP.length;
-          if (fracP.length > maxFracLen) maxFracLen = fracP.length;
+          double iw = _getTextWidth(intP, _fontSizeContent);
+          double fw = _getTextWidth(fracP, _fontSizeContent);
+          if (iw > maxIntWidth) maxIntWidth = iw;
+          if (fw > maxFracWidth) maxFracWidth = fw;
         }
       }
-      double intWidth = (maxIntLen * _fontSizeContent * 0.9) + 10;
-      double fracWidth = (maxFracLen * _fontSizeContent * 0.9) + 10;
+      double intWidth = maxIntWidth + 2; 
+      double fracWidth = maxFracWidth;   
+      
       for (var line in lines) {
-        if (displayLines >= _maxLinesGrid) break;
+        if (displayLines >= maxAllowedLines) break;
         Match? m = RegExp(r'^(.*?)\s*\.{2,}\s*(\d+(?:[\.,]\d+)?)\s*$').firstMatch(line);
         if (m != null) {
           String prefix = m.group(1)!.trimRight();
@@ -900,36 +906,33 @@ class _MainListScreenState extends State<MainListScreen> {
             textBaseline: TextBaseline.alphabetic,
             children: [
               Expanded(
-                child: Linkify(
-                  text: leaderText,
+                child: Text(
+                  leaderText,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor),
-                  onOpen: (link) {},
+                  style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor, fontFamily: 'monospace'),
                 ),
               ),
               const SizedBox(width: 4),
               SizedBox(
                 width: intWidth,
-                child: Linkify(
-                  text: intP,
+                child: Text(
+                  intP,
                   textAlign: TextAlign.right,
                   maxLines: 1,
                   overflow: TextOverflow.visible,
-                  style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor),
-                  onOpen: (link) {},
+                  style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor, fontFamily: 'monospace'),
                 ),
               ),
-              if (maxFracLen > 0)
+              if (fracP.isNotEmpty)
                 SizedBox(
                   width: fracWidth,
-                  child: Linkify(
-                    text: fracP,
+                  child: Text(
+                    fracP,
                     textAlign: TextAlign.left,
                     maxLines: 1,
                     overflow: TextOverflow.visible,
-                    style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor),
-                    onOpen: (link) {},
+                    style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor, fontFamily: 'monospace'),
                   ),
                 ),
             ],
@@ -942,7 +945,7 @@ class _MainListScreenState extends State<MainListScreen> {
               final url = Uri.parse(link.url);
               if (await canLaunchUrl(url)) { await launchUrl(url, mode: LaunchMode.externalApplication); }
             },
-            maxLines: _maxLinesGrid - displayLines > 0 ? _maxLinesGrid - displayLines : 1,
+            maxLines: maxAllowedLines - displayLines > 0 ? maxAllowedLines - displayLines : 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor),
             linkStyle: linkStyle,
