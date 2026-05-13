@@ -26,7 +26,7 @@ class NoteFormScreen extends StatefulWidget {
 
 class _NoteFormScreenState extends State<NoteFormScreen> {
   final _titleController = TextEditingController();
-  final _contentController = TextEditingController();
+  final _contentController = MathHighlightController();
   final _tagController = TextEditingController(); 
   final _contentFocusNode = FocusNode();
   String? _imagePath;
@@ -298,12 +298,21 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     } catch (e) { debugPrint("Грешка копиране: $e"); }
     return null;
   }
+  double _getTextWidth(String text) {
+    final tp = TextPainter(
+      text: TextSpan(text: text, style: TextStyle(fontSize: _fontSizeContent)),
+      maxLines: 1,
+      textDirection: TextDirection.ltr,
+    )..layout();
+    return tp.width;
+  }
+
   void _formatPricesBeforeSave() {
     String text = _contentController.text;
     if (text.isEmpty) return;
     List<String> lines = text.split('\n');
     RegExp exp = RegExp(r'^(.*?)\s*\.{2,}\s*(\d+(?:[\.,]\d+)?)\s*$');
-    int maxIntLen = 0;
+    
     List<int> matchingIndices = [];
     List<Match> matches = [];
     for (int i = 0; i < lines.length; i++) {
@@ -311,32 +320,45 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       if (m != null) {
         matchingIndices.add(i);
         matches.add(m);
-        String numStr = m.group(2)!;
-        String intPart = numStr.contains('.') ? numStr.split('.')[0] : (numStr.contains(',') ? numStr.split(',')[0] : numStr);
-        if (intPart.length > maxIntLen) maxIntLen = intPart.length;
       }
     }
     if (matchingIndices.isEmpty) return;
-    int minBaseCol = _alignmentColumn;
+    
+    double dotWidth = _getTextWidth(".");
+    double spaceWidth = _getTextWidth(" ");
+    double minTargetWidth = _alignmentColumn * _fontSizeContent * 0.6;
+    
     for (int i = 0; i < matchingIndices.length; i++) {
-      Match m = matches[i];
-      String prefix = m.group(1)!;
-      String numStr = m.group(2)!;
-      String intPart = numStr.contains('.') ? numStr.split('.')[0] : (numStr.contains(',') ? numStr.split(',')[0] : numStr);
-      int requiredBase = prefix.length + intPart.length - maxIntLen + 4;
-      if (requiredBase > minBaseCol) minBaseCol = requiredBase;
+      String prefix = matches[i].group(1)!.trimRight();
+      double prefixWidth = _getTextWidth(prefix);
+      double requiredWidth = prefixWidth + spaceWidth * 2 + dotWidth * 2;
+      if (requiredWidth > minTargetWidth) minTargetWidth = requiredWidth;
     }
-    int baseCol = minBaseCol;
+    
+    double maxIntPartWidth = 0;
+    for (int i = 0; i < matchingIndices.length; i++) {
+      String numStr = matches[i].group(2)!;
+      String intPart = numStr.contains('.') ? numStr.split('.')[0] : (numStr.contains(',') ? numStr.split(',')[0] : numStr);
+      double intWidth = _getTextWidth(intPart);
+      if (intWidth > maxIntPartWidth) maxIntPartWidth = intWidth;
+    }
+    
     bool changed = false;
     for (int i = 0; i < matchingIndices.length; i++) {
       int lineIdx = matchingIndices[i];
       Match m = matches[i];
-      String prefix = m.group(1)!;
+      String prefix = m.group(1)!.trimRight();
       String numStr = m.group(2)!;
       String intPart = numStr.contains('.') ? numStr.split('.')[0] : (numStr.contains(',') ? numStr.split(',')[0] : numStr);
-      int numberStartCol = baseCol + (maxIntLen - intPart.length);
-      int dotsCount = numberStartCol - prefix.length - 2;
+      
+      double prefixWidth = _getTextWidth(prefix);
+      double intWidth = _getTextWidth(intPart);
+      
+      double numberStartTarget = minTargetWidth + (maxIntPartWidth - intWidth);
+      double dotsWidthNeeded = numberStartTarget - prefixWidth - spaceWidth * 2;
+      int dotsCount = (dotsWidthNeeded / dotWidth).round();
       if (dotsCount < 2) dotsCount = 2;
+      
       String newPrefix = prefix.isEmpty ? "" : "$prefix ";
       String filler = "." * dotsCount;
       String newLine = "$newPrefix$filler $numStr";
@@ -462,30 +484,46 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   void _calculateNote() {
     final text = _contentController.text;
     final selection = _contentController.selection;
-    String input = (selection.start != -1 && selection.end != -1 && selection.start != selection.end) ? text.substring(selection.start, selection.end) : text;
+    bool hasSelection = selection.start != -1 && selection.end != -1 && selection.start != selection.end;
+    String input = hasSelection ? text.substring(selection.start, selection.end) : text;
+    int offset = hasSelection ? selection.start : 0;
     List<String> lines = input.split('\n');
     List<String> parts = [];
+    List<TextRange> newHighlights = [];
     RegExp listPrefix = RegExp(r'^(\d+\.\s+|[•\-\*]\s+|[☐☑]\s+)');
     RegExp datePrefix = RegExp(r'^\d{1,2}[\./-]\d{1,2}([\./-]\d{2,4})?\s+');
     RegExp onlyMath = RegExp(r'^[0-9+\-*/().\s,xXхХ]+$');
     RegExp trailingExpr = RegExp(r'([+\-*/xXхХ]?\s*[0-9().,xXхХ+\-*/\s]*\d[0-9().,xXхХ+\-*/\s]*)$');
+    int currentOffset = offset;
     for (var line in lines) {
       String processed = line.trim();
-      if (processed.isEmpty) continue;
-      processed = processed.replaceFirst(listPrefix, '');
-      processed = processed.replaceFirst(datePrefix, '');
-      if (processed.isEmpty) continue;
-      String matchStr = "";
-      if (onlyMath.hasMatch(processed)) { matchStr = processed; } 
-      else {
-        final m = trailingExpr.firstMatch(processed);
-        if (m != null) matchStr = m.group(0)!;
+      if (processed.isNotEmpty) {
+        String noPrefix = processed.replaceFirst(listPrefix, '').replaceFirst(datePrefix, '');
+        if (noPrefix.isNotEmpty) {
+          int dotsIdx = noPrefix.lastIndexOf(RegExp(r'\.{2,}'));
+          if (dotsIdx != -1) {
+            noPrefix = noPrefix.substring(dotsIdx).replaceFirst(RegExp(r'^\.+\s*'), '');
+          }
+          
+          String matchStr = "";
+          if (onlyMath.hasMatch(noPrefix)) { matchStr = noPrefix; } 
+          else {
+            final m = trailingExpr.firstMatch(noPrefix);
+            if (m != null) matchStr = m.group(0)!;
+          }
+          String trimmedMatch = matchStr.trim();
+          if (trimmedMatch.isNotEmpty) {
+            String clean = trimmedMatch.replaceAll(',', '.').replaceAll(RegExp(r'[xXхХ]'), '*');
+            if (parts.isNotEmpty && !clean.startsWith(RegExp(r'[+\-*/]'))) { parts.add('+'); }
+            parts.add(clean);
+            int idxInLine = line.lastIndexOf(trimmedMatch);
+            if (idxInLine != -1) {
+              newHighlights.add(TextRange(start: currentOffset + idxInLine, end: currentOffset + idxInLine + trimmedMatch.length));
+            }
+          }
+        }
       }
-      if (matchStr.trim().isNotEmpty) {
-        String clean = matchStr.replaceAll(',', '.').replaceAll(RegExp(r'[xXхХ]'), '*').trim();
-        if (parts.isNotEmpty && !clean.startsWith(RegExp(r'[+\-*/]'))) { parts.add('+'); }
-        parts.add(clean);
-      }
+      currentOffset += line.length + 1;
     }
     String expr = parts.join(' ').replaceAll(RegExp(r'\s+'), ' ').trim();
     if (expr.isEmpty) return;
@@ -494,6 +532,10 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       String resStr = "= ${res.toStringAsFixed(2).replaceAll(RegExp(r'\.00$'), '')}";
       Clipboard.setData(ClipboardData(text: resStr));
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$expr $resStr (Копирано)"), duration: const Duration(seconds: 5)));
+      _contentController.setHighlights(newHighlights, _textColor.withValues(alpha: 0.3), _textColor);
+      if (!_isEditing) {
+        setState(() { _isEditing = true; });
+      }
     } catch (e) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Грешка при изчисление: $expr"))); }
   }
   double _evaluateExpression(String expr) {
@@ -537,13 +579,31 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     if (selection.start == -1) return;
     int lineEnd = text.indexOf('\n', selection.start);
     if (lineEnd == -1) lineEnd = text.length;
-    if (selection.start < lineEnd) { _contentController.selection = TextSelection.collapsed(offset: lineEnd); } 
-    else {
+    if (selection.start < lineEnd) { 
+      _contentController.selection = TextSelection.collapsed(offset: lineEnd); 
+    } else {
       int lineStart = text.lastIndexOf('\n', selection.start - 1) + 1;
-      int currentColumn = selection.start - lineStart;
-      int dotsCount = _alignmentColumn - currentColumn - 2;
-      String filler = (dotsCount > 0) ? " ${"." * dotsCount} " : "    ";
-      _contentController.value = TextEditingValue(text: text.replaceRange(selection.start, selection.start, filler), selection: TextSelection.collapsed(offset: selection.start + filler.length));
+      String currentLineText = text.substring(lineStart, selection.start).trimRight();
+      
+      double targetWidth = _alignmentColumn * _fontSizeContent * 0.6;
+      double currentWidth = _getTextWidth(currentLineText);
+      double dotWidth = _getTextWidth(".");
+      double spaceWidth = _getTextWidth(" ");
+      
+      int dotsCount = ((targetWidth - currentWidth - spaceWidth * 2) / dotWidth).round();
+      if (dotsCount < 2) dotsCount = 2;
+      
+      String newPrefix = currentLineText.isEmpty ? "" : "$currentLineText ";
+      String filler = "${"." * dotsCount} ";
+      
+      int replaceStart = lineStart;
+      int replaceEnd = selection.start;
+      String newTextToInsert = "$newPrefix$filler";
+      
+      _contentController.value = TextEditingValue(
+        text: text.replaceRange(replaceStart, replaceEnd, newTextToInsert), 
+        selection: TextSelection.collapsed(offset: replaceStart + newTextToInsert.length)
+      );
     }
   }
   void _toggleCheckboxLine(int index) {
@@ -578,7 +638,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
           content: Text('Сигурни ли сте, че искате да изтриете тази бележка?', style: TextStyle(color: _contrast(Color(_appColor), Colors.black87, Colors.white70))),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Отказ', style: TextStyle(color: _contrast(Color(_appColor), Colors.black54, Colors.white60)))),
-            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Изтрий', style: TextStyle(color: Colors.red))),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Изтрий', style: TextStyle(color: _contrast(Color(_appColor), Colors.black54, Colors.white60)))),
           ],
         ),
       ) ?? false;
@@ -772,7 +832,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                               children: [
                                                 Icon(isChecked ? Icons.check_box : Icons.check_box_outline_blank, size: 22, color: _textColor),
                                                 const SizedBox(width: 8),
-                                                Expanded(child: Linkify(
+                                                Expanded(child: SelectableLinkify(
                                                   text: line.substring(checkMatch.end),
                                                   onOpen: _onLinkOpen,
                                                   style: TextStyle(fontSize: _fontSizeContent, color: _textColor, decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.2),
@@ -783,7 +843,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                           ),
                                         );
                                       }
-                                      return Linkify(
+                                      return SelectableLinkify(
                                         text: line,
                                         onOpen: _onLinkOpen,
                                         style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.2),
@@ -824,7 +884,13 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
             ),
             FlyMenu(actions: [
               if (widget.item?['id'] != null) FlyAction(icon: Icons.delete, onTap: _deleteNote, label: "Изтрий"),
-              FlyAction(icon: Icons.arrow_back, onTap: () => Navigator.maybePop(context), label: "Назад"),
+              FlyAction(icon: Icons.arrow_back, onTap: () {
+                if (_isEditing && widget.item?['id'] != null) {
+                  setState(() => _isEditing = false);
+                } else {
+                  Navigator.maybePop(context);
+                }
+              }, label: "Назад"),
               if (_isEditing) FlyAction(icon: Icons.save, onTap: _save, label: "Запази"),
               if (!_isEditing) FlyAction(icon: Icons.calculate_outlined, onTap: _calculateNote, label: "Калкулатор"),
               if (!_isEditing) FlyAction(icon: Icons.edit, onTap: () => setState(() => _isEditing = true), label: "Редактирай"),
@@ -900,6 +966,57 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
         ],
       ),
     );
+  }
+}
+
+class MathHighlightController extends TextEditingController {
+  List<TextRange> highlights = [];
+  Color highlightBgColor = Colors.yellow.withValues(alpha: 0.4);
+  Color highlightTextColor = Colors.black;
+  void setHighlights(List<TextRange> newHighlights, Color bgColor, Color txtColor) {
+    highlights = newHighlights;
+    highlightBgColor = bgColor;
+    highlightTextColor = txtColor;
+    notifyListeners();
+  }
+  void clearHighlights() {
+    if (highlights.isNotEmpty) {
+      highlights.clear();
+      notifyListeners();
+    }
+  }
+  @override
+  set text(String newText) {
+    highlights.clear();
+    super.text = newText;
+  }
+  @override
+  set value(TextEditingValue newValue) {
+    if (newValue.text != value.text) {
+      highlights.clear();
+    }
+    super.value = newValue;
+  }
+  @override
+  TextSpan buildTextSpan({required BuildContext context, TextStyle? style, required bool withComposing}) {
+    if (highlights.isEmpty) return TextSpan(style: style, text: text);
+    List<InlineSpan> spans = [];
+    int lastEnd = 0;
+    List<TextRange> sorted = List.from(highlights)..sort((a, b) => a.start.compareTo(b.start));
+    for (var range in sorted) {
+      if (range.start < lastEnd) continue;
+      if (range.start > text.length) break;
+      int end = range.end > text.length ? text.length : range.end;
+      if (range.start > lastEnd) {
+        spans.add(TextSpan(text: text.substring(lastEnd, range.start), style: style));
+      }
+      spans.add(TextSpan(text: text.substring(range.start, end), style: style?.copyWith(backgroundColor: highlightBgColor, color: highlightTextColor)));
+      lastEnd = end;
+    }
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(text: text.substring(lastEnd), style: style));
+    }
+    return TextSpan(style: style, children: spans);
   }
 }
 

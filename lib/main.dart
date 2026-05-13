@@ -884,8 +884,8 @@ class _MainListScreenState extends State<MainListScreen> {
           if (fracP.length > maxFracLen) maxFracLen = fracP.length;
         }
       }
-      double intWidth = (maxIntLen * _fontSizeContent * 0.65) + 4;
-      double fracWidth = (maxFracLen * _fontSizeContent * 0.65) + 4;
+      double intWidth = (maxIntLen * _fontSizeContent * 0.9) + 10;
+      double fracWidth = (maxFracLen * _fontSizeContent * 0.9) + 10;
       for (var line in lines) {
         if (displayLines >= _maxLinesGrid) break;
         Match? m = RegExp(r'^(.*?)\s*\.{2,}\s*(\d+(?:[\.,]\d+)?)\s*$').firstMatch(line);
@@ -894,35 +894,42 @@ class _MainListScreenState extends State<MainListScreen> {
           String price = m.group(2)!;
           String intP = price.contains('.') ? price.split('.')[0] : (price.contains(',') ? price.split(',')[0] : price);
           String fracP = price.contains('.') ? ".${price.split('.')[1]}" : (price.contains(',') ? ",${price.split(',')[1]}" : "");
-          String leaderText = prefix.isEmpty ? "." * 150 : "$prefix ${'.' * 150}";
+          String leaderText = prefix.isEmpty ? "." * 150 : "${prefix.replaceAll(' ', '\u00A0')}\u00A0${'.' * 150}";
           widgets.add(Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
             children: [
               Expanded(
-                child: Text(
-                  leaderText,
+                child: Linkify(
+                  text: leaderText,
                   maxLines: 1,
-                  overflow: TextOverflow.clip,
-                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor),
+                  onOpen: (link) {},
                 ),
               ),
               const SizedBox(width: 4),
               SizedBox(
                 width: intWidth,
-                child: Text(
-                  intP,
+                child: Linkify(
+                  text: intP,
                   textAlign: TextAlign.right,
+                  maxLines: 1,
+                  overflow: TextOverflow.visible,
                   style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor),
+                  onOpen: (link) {},
                 ),
               ),
               if (maxFracLen > 0)
                 SizedBox(
                   width: fracWidth,
-                  child: Text(
-                    fracP,
+                  child: Linkify(
+                    text: fracP,
                     textAlign: TextAlign.left,
+                    maxLines: 1,
+                    overflow: TextOverflow.visible,
                     style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor),
+                    onOpen: (link) {},
                   ),
                 ),
             ],
