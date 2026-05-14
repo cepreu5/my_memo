@@ -10,6 +10,7 @@ class TagScrollFilter extends StatefulWidget {
   final int? filterColor;
   final bool tasksOnly;
   final bool reverseOrder;
+  final bool sortById;
   final Function() onClearAll;
   final Function() onOpenFilterMenu;
 
@@ -24,6 +25,7 @@ class TagScrollFilter extends StatefulWidget {
     required this.filterColor,
     required this.tasksOnly,
     required this.reverseOrder,
+    required this.sortById,
     required this.onClearAll,
     required this.onOpenFilterMenu,
   });
@@ -51,7 +53,7 @@ class _TagScrollFilterState extends State<TagScrollFilter> {
       if (!aSelected && bSelected) return 1;
       return a.compareTo(b);
     });
-    final bool hasSelection = widget.selectedTags.isNotEmpty || widget.startDate != null || widget.filterColor != null || widget.tasksOnly || widget.reverseOrder;
+    final bool hasSelection = widget.selectedTags.isNotEmpty || widget.startDate != null || widget.filterColor != null || widget.tasksOnly || widget.reverseOrder || widget.sortById;
     return Container(
       height: 40,
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -94,7 +96,7 @@ class _TagScrollFilterState extends State<TagScrollFilter> {
                             children: [
                               if (widget.startDate != null && widget.endDate != null)
                                 Text("${widget.startDate!.day}.${widget.startDate!.month}-${widget.endDate!.day}.${widget.endDate!.month}", style: const TextStyle(fontSize: 10, color: Colors.black))
-                              else if (widget.filterColor == null && !widget.tasksOnly && !widget.reverseOrder)
+                              else if (widget.filterColor == null && !widget.tasksOnly && !widget.reverseOrder && !widget.sortById)
                                  const Icon(Icons.filter_list, size: 12, color: Colors.black87)
                               else ...[
                                   if (widget.filterColor != null) ...[
@@ -107,6 +109,10 @@ class _TagScrollFilterState extends State<TagScrollFilter> {
                                   ],
                                   if (widget.reverseOrder) ...[
                                      const Icon(Icons.sort, size: 12, color: Colors.black87),
+                                     const SizedBox(width: 2),
+                                  ],
+                                  if (widget.sortById) ...[
+                                     const Icon(Icons.format_list_numbered, size: 12, color: Colors.black87),
                                   ],
                               ],
                             ],

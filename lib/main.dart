@@ -67,8 +67,10 @@ class _MainListScreenState extends State<MainListScreen> {
   bool _filterTasksOnly = false;
   bool _reverseOrder = false;
   bool _sortById = false;
+  bool _forceTwoDecimals = true;
   int _maxTitleLength = 70;
   int _appColor = const Color(0xFFFF5E00).toARGB32();
+  int _alignmentColumn = 30;
   List<Color> _noteColors = [
     Colors.white, const Color(0xFF0A1931), const Color(0xFFFF5E00), 
     const Color(0xFFFFC93C), const Color(0xFF6A2C70), const Color(0xFFB83B5E), 
@@ -127,6 +129,10 @@ class _MainListScreenState extends State<MainListScreen> {
       _showDate = prefs.getBool('show_date') ?? false;
       _maxTitleLength = prefs.getInt('max_title_length') ?? 70;
       _appColor = prefs.getInt('bg_color') ?? const Color(0xFFFF5E00).toARGB32();
+      _reverseOrder = prefs.getBool('reverse_order') ?? false;
+      _sortById = prefs.getBool('sort_by_id') ?? false;
+      _forceTwoDecimals = prefs.getBool('force_two_decimals') ?? true;
+      _alignmentColumn = prefs.getInt('alignment_column') ?? 30;
       final customList = prefs.getStringList('custom_palette') ?? [];
       _noteColors = [
         Colors.white, const Color(0xFF0A1931), const Color(0xFFFF5E00), 
@@ -283,7 +289,7 @@ class _MainListScreenState extends State<MainListScreen> {
         if (_sortById) {
           final valA = (a['id'] ?? 0);
           final valB = (b['id'] ?? 0);
-          return _reverseOrder ? valA.compareTo(valB) : valB.compareTo(valA);
+          return _reverseOrder ? valB.compareTo(valA) : valA.compareTo(valB);
         } else {
           final valA = (a['reminderTime'] ?? '').toString();
           final valB = (b['reminderTime'] ?? '').toString();
@@ -416,7 +422,10 @@ class _MainListScreenState extends State<MainListScreen> {
                       ),
                     ),
                     InkWell(
-                      onTap: () {
+                      onTap: () async {
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.setBool('sort_by_id', !_sortById);
+                        if (!mounted) return;
                         setState(() { _sortById = !_sortById; });
                         _filterItems(_searchController.text);
                         setModalState(() {});
@@ -432,7 +441,10 @@ class _MainListScreenState extends State<MainListScreen> {
                               visualDensity: VisualDensity.compact,
                               padding: EdgeInsets.zero,
                               icon: Icon(_sortById ? Icons.check_box : Icons.check_box_outline_blank, size: 24, color: contrastColor),
-                              onPressed: () {
+                              onPressed: () async {
+                                final prefs = await SharedPreferences.getInstance();
+                                await prefs.setBool('sort_by_id', !_sortById);
+                                if (!mounted) return;
                                 setState(() { _sortById = !_sortById; });
                                 _filterItems(_searchController.text);
                                 setModalState(() {});
@@ -444,7 +456,10 @@ class _MainListScreenState extends State<MainListScreen> {
                     ),
                     Divider(color: contrastColor.withValues(alpha: 0.2)),
                     InkWell(
-                      onTap: () {
+                      onTap: () async {
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.setBool('reverse_order', !_reverseOrder);
+                        if (!mounted) return;
                         setState(() { _reverseOrder = !_reverseOrder; });
                         _filterItems(_searchController.text);
                         setModalState(() {});
@@ -462,8 +477,12 @@ class _MainListScreenState extends State<MainListScreen> {
                               activeColor: contrastColor,
                               side: BorderSide(color: contrastColor, width: 2.0),
                               checkColor: Color(_appColor),
-                              onChanged: (val) {
-                                setState(() { _reverseOrder = val ?? false; });
+                              onChanged: (val) async {
+                                final prefs = await SharedPreferences.getInstance();
+                                final newVal = val ?? false;
+                                await prefs.setBool('reverse_order', newVal);
+                                if (!mounted) return;
+                                setState(() { _reverseOrder = newVal; });
                                 _filterItems(_searchController.text);
                                 setModalState(() {});
                               },
@@ -476,10 +495,18 @@ class _MainListScreenState extends State<MainListScreen> {
                 ),
               ),
               actions: [
-                TextButton(onPressed: () {
-                  setState(() { _startDate = null; _endDate = null; _filterColor = null; _filterTasksOnly = false; _reverseOrder = false; _sortById = false; _selectedFilterTags.clear(); });
+                TextButton(onPressed: () async {
+                  final navigator = Navigator.of(ctx);
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setBool('sort_by_id', false);
+                  await prefs.setBool('reverse_order', false);
+                  if (!mounted) return;
+                  setState(() { 
+                    _startDate = null; _endDate = null; _filterColor = null; _filterTasksOnly = false; 
+                    _reverseOrder = false; _sortById = false; _selectedFilterTags.clear(); 
+                  });
                   _filterItems(_searchController.text);
-                  Navigator.pop(ctx);
+                  navigator.pop();
                 }, child: Text("Изчисти всички", style: TextStyle(color: secondaryContrast))),
                 ElevatedButton(onPressed: () => Navigator.pop(ctx), child: const Text("Готово")),
               ],
@@ -746,12 +773,17 @@ class _MainListScreenState extends State<MainListScreen> {
                   filterColor: _filterColor,
                   tasksOnly: _filterTasksOnly,
                   reverseOrder: _reverseOrder,
+                  sortById: _sortById,
                   onOpenFilterMenu: _showFilterDialog,
                   onSelectionChanged: (newList) {
                     setState(() { _selectedFilterTags = newList; });
                     _filterItems(_searchController.text);
                   },
-                  onClearAll: () {
+                  onClearAll: () async {
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setBool('sort_by_id', false);
+                    await prefs.setBool('reverse_order', false);
+                    if (!mounted) return;
                     setState(() {
                       _selectedFilterTags.clear();
                       _startDate = null;
@@ -782,10 +814,14 @@ class _MainListScreenState extends State<MainListScreen> {
                   ),
                 FlyAction(icon: Icons.filter_list, onTap: _showFilterDialog, label: "Филтри"),
                 FlyAction(icon: Icons.label_outline, onTap: _showGlobalTagsModal, label: "Етикети"),
-                if (_selectedFilterTags.isNotEmpty || _startDate != null || _filterColor != null || _filterTasksOnly || _reverseOrder)
+                if (_selectedFilterTags.isNotEmpty || _startDate != null || _filterColor != null || _filterTasksOnly || _reverseOrder || _sortById)
                   FlyAction(
                     icon: Icons.label_off_outlined,
-                    onTap: () {
+                    onTap: () async {
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setBool('sort_by_id', false);
+                      await prefs.setBool('reverse_order', false);
+                      if (!mounted) return;
                       setState(() {
                         _selectedFilterTags.clear();
                         _startDate = null;
@@ -846,7 +882,7 @@ class _MainListScreenState extends State<MainListScreen> {
     final Color textColor = cardColor.computeLuminance() > 0.5 ? Colors.black87 : Colors.white;
     final Color secondaryTextColor = cardColor.computeLuminance() > 0.5 ? Colors.black54 : Colors.white70;
     final Color bottomColor = cardColor == Colors.white ? Colors.grey[100]! : HSLColor.fromColor(cardColor).withLightness((HSLColor.fromColor(cardColor).lightness - 0.1).clamp(0.0, 1.0)).toColor();
-    Widget content = Padding(
+    Widget cardContent = Padding(
       padding: const EdgeInsets.all(10.0),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -886,22 +922,22 @@ class _MainListScreenState extends State<MainListScreen> {
     );
     final String? displayImagePath = item['imagePath'];
     if (!isGrid && displayImagePath != null) {
-      content = Row(
+      cardContent = Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: 100, alignment: Alignment.topCenter, margin: const EdgeInsets.fromLTRB(10, 10, 0, 10),
             child: ClipRRect(borderRadius: BorderRadius.circular(8), child: ConstrainedBox(constraints: const BoxConstraints(maxHeight: 100, maxWidth: 100), child: Image.file(File(displayImagePath), fit: BoxFit.cover, errorBuilder: (c, e, s) => const Icon(Icons.broken_image, color: Colors.grey)))),
           ),
-          Expanded(child: content),
+          Expanded(child: cardContent),
         ],
       );
     } else if (isGrid && displayImagePath != null) {
-      content = Column(
+      cardContent = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ClipRRect(borderRadius: const BorderRadius.vertical(top: Radius.circular(8)), child: NoteGridImage(imagePath: displayImagePath, backgroundColor: cardColor, compactView: _compactGridView)),
-          content,
+          cardContent,
         ],
       );
     }
@@ -953,7 +989,7 @@ class _MainListScreenState extends State<MainListScreen> {
                 copy.remove('tags');
                 _openNoteForm(initialData: copy, startInEditMode: true);
               },
-              child: content
+              child: cardContent
             ),
           ),
         ),
@@ -961,48 +997,20 @@ class _MainListScreenState extends State<MainListScreen> {
     );
   }
 
-  // Изчислява точната ширина на текст за целите на подравняването в колони.
-  double _getTextWidth(String text, double fontSize) {
-    final tp = TextPainter(
-      text: TextSpan(text: text, style: TextStyle(fontSize: fontSize, fontFamily: 'monospace')),
-      maxLines: 1,
-      textDirection: TextDirection.ltr,
-    )..layout();
-    return tp.width;
-  }
   // Специализиран метод за изобразяване на съдържанието, поддържащ линкове, чекбоксове и подравнени ценови списъци.
   Widget _buildContentWithLinks(String content, Color secondaryTextColor, Color textColor, bool isGrid) {
     final linkStyle = TextStyle(color: textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue, decoration: TextDecoration.none);
-    // Matches: (prefix) (3+ spaces OR 2+ dots) (price)
-    final priceExp = RegExp(r'^(.*?)(?:\s{3,}|\s*\.{2,}\s*)(\d+(?:[\.,]\d+)?)\s*$', multiLine: true);
+    // Regex for price lines: (prefix) (dots or spaces) (number)
+    final priceExp = RegExp(r'^(.*?)(?:\s*\.{2,}\s*|\s{2,})(\d+(?:[\.,]\d+)?)\s*$');
     final checkPattern = RegExp(r'^([☐☑]|\[\s?[xXvV]?\s?\])\s+');
     
     final lines = content.split('\n');
     List<Widget> widgets = [];
     int displayLines = 0;
     int maxAllowedLines = isGrid ? _maxLinesGrid : _maxLinesList;
-
-    bool hasPriceLines = priceExp.hasMatch(content);
-    double maxIntWidth = 0;
-    double maxFracWidth = 0;
-
-    if (hasPriceLines) {
-      for (var line in lines) {
-        Match? m = priceExp.firstMatch(line);
-        if (m != null) {
-          String price = m.group(2)!;
-          String intP = price.contains('.') ? price.split('.')[0] : (price.contains(',') ? price.split(',')[0] : price);
-          String fracP = price.contains('.') ? ".${price.split('.')[1]}" : (price.contains(',') ? ",${price.split(',')[1]}" : "");
-          double iw = _getTextWidth(intP, _fontSizeContent);
-          double fw = _getTextWidth(fracP, _fontSizeContent);
-          if (iw > maxIntWidth) maxIntWidth = iw;
-          if (fw > maxFracWidth) maxFracWidth = fw;
-        }
-      }
-    }
-
-    double intWidth = maxIntWidth + 2; 
-    double fracWidth = maxFracWidth;   
+    
+    // Grid fits about 18-20 chars on most screens. Let's use 18 to be safe.
+    int targetWidth = isGrid ? 18 : _alignmentColumn;
 
     for (var line in lines) {
       if (displayLines >= maxAllowedLines) break;
@@ -1015,105 +1023,72 @@ class _MainListScreenState extends State<MainListScreen> {
         cleanLine = line.substring(checkMatch.end);
       }
 
-      Match? m = priceExp.firstMatch(line);
+      String finalString = cleanLine;
+      Match? m = priceExp.firstMatch(cleanLine);
+      bool isPriceLine = m != null;
+      
       if (m != null) {
-        String prefix = m.group(1)!.trimRight();
-        // Remove checkbox from prefix if present
-        Match? pCheck = checkPattern.firstMatch(prefix);
-        if (pCheck != null) prefix = prefix.substring(pCheck.end).trim();
-
+        String prefix = m.group(1)!.replaceAll(RegExp(r'\.+$'), '').trimRight();
         String price = m.group(2)!;
-        String intP = price.contains('.') ? price.split('.')[0] : (price.contains(',') ? price.split(',')[0] : price);
-        String fracP = price.contains('.') ? ".${price.split('.')[1]}" : (price.contains(',') ? ",${price.split(',')[1]}" : "");
+        if (_forceTwoDecimals) {
+          double? val = double.tryParse(price.replaceAll(',', '.'));
+          if (val != null) price = val.toStringAsFixed(2);
+        }
         
-        widgets.add(Row(
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            if (checkMatch != null) ...[
-              Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: Icon(isChecked ? Icons.check_box : Icons.check_box_outline_blank, size: 18, color: secondaryTextColor),
-              ),
-            ],
-            if (prefix.isNotEmpty)
-              Flexible(
-                child: Text(
-                  prefix.replaceAll(' ', '\u00A0'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor, fontFamily: 'monospace', decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.2),
-                ),
-              ),
-            if (!isGrid) 
-              Text(
-                ' ${'.' * 150} ',
-                maxLines: 1,
-                overflow: TextOverflow.clip,
-                style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor, fontFamily: 'monospace', height: 1.2),
-              )
-            else
-              const Spacer(),
-            const SizedBox(width: 4),
-            SizedBox(
-              width: intWidth,
-              child: Text(
-                intP,
-                textAlign: TextAlign.right,
-                maxLines: 1,
-                overflow: TextOverflow.visible,
-                style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor, fontFamily: 'monospace', decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.2),
-              ),
-            ),
-            SizedBox(
-              width: fracWidth,
-              child: Text(
-                fracP,
-                textAlign: TextAlign.left,
-                maxLines: 1,
-                overflow: TextOverflow.visible,
-                style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor, fontFamily: 'monospace', decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.2),
-              ),
-            ),
-          ],
-        ));
-        displayLines++;
-      } else {
-        final hasLink = RegExp(r'https?://|www\.').hasMatch(cleanLine);
-        widgets.add(Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (checkMatch != null) ...[
-              Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: Icon(isChecked ? Icons.check_box : Icons.check_box_outline_blank, size: 18, color: secondaryTextColor),
-              ),
-            ],
-            Expanded(
-              child: hasLink 
-                ? Linkify(
-                    text: cleanLine,
-                    onOpen: (link) async {
-                      final url = Uri.parse(link.url);
-                      if (await canLaunchUrl(url)) { await launchUrl(url, mode: LaunchMode.externalApplication); }
-                    },
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor, decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.2, fontFamily: checkMatch != null ? 'monospace' : null),
-                    linkStyle: linkStyle,
-                  )
-                : Text(
-                    cleanLine,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor, decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.0, fontFamily: checkMatch != null ? 'monospace' : null),
-                  ),
-            ),
-          ],
-        ));
-        displayLines++;
+        int priceLen = price.length;
+        int availableForPrefix = targetWidth - priceLen - 1; // 1 space before price
+
+        String filler;
+        String truncatedPrefix;
+        
+        if (prefix.length + 2 <= availableForPrefix) {
+          // If there's room for at least 2 dots, use them
+          truncatedPrefix = prefix;
+          filler = "." * (availableForPrefix - prefix.length);
+        } else {
+          // No room for dots, just truncate prefix and use a single space
+          truncatedPrefix = prefix.length > availableForPrefix ? prefix.substring(0, availableForPrefix) : prefix;
+          filler = ""; // No dots if truncated
+        }
+        finalString = filler.isEmpty ? "$truncatedPrefix $price" : "$truncatedPrefix$filler $price";
       }
+
+      final hasLink = RegExp(r'https?://|www\.').hasMatch(finalString);
+      
+      widgets.add(Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          if (checkMatch != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 4, top: 1),
+              child: Icon(isChecked ? Icons.check_box : Icons.check_box_outline_blank, size: 18, color: secondaryTextColor),
+            ),
+          Expanded(
+            child: hasLink 
+              ? Linkify(
+                  text: finalString,
+                  onOpen: (link) async {
+                    final url = Uri.parse(link.url);
+                    if (await canLaunchUrl(url)) { await launchUrl(url, mode: LaunchMode.externalApplication); }
+                  },
+                  maxLines: 1,
+                  overflow: isPriceLine ? TextOverflow.clip : TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor, decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.0, fontFamily: 'monospace'),
+                  linkStyle: linkStyle,
+                )
+              : Text(
+                  finalString,
+                  maxLines: 1,
+                  overflow: isPriceLine ? TextOverflow.clip : TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor, decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.0, fontFamily: 'monospace'),
+                ),
+          ),
+        ],
+      ));
+      
+      displayLines++;
     }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: widgets,

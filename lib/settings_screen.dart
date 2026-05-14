@@ -27,6 +27,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   double _fontSizeFormContent = 16;
   int _maxTitleLength = 70;
   int _alignmentColumn = 30;
+  bool _forceTwoDecimals = true;
   final TextEditingController _listLinesController = TextEditingController();
   final TextEditingController _gridLinesController = TextEditingController();
   final TextEditingController _listTitleSizeController = TextEditingController();
@@ -77,6 +78,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _fontSizeFormContent = prefs.getDouble('form_content_size') ?? 16;
       _maxTitleLength = prefs.getInt('max_title_length') ?? 70;
       _alignmentColumn = prefs.getInt('alignment_column') ?? 30;
+      _forceTwoDecimals = prefs.getBool('force_two_decimals') ?? true;
       final customList = prefs.getStringList('custom_palette') ?? [];
       _customPalette = customList.map((s) => Color(int.parse(s))).toList();
       if (updateControllers) {
@@ -110,6 +112,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.setDouble('form_content_size', _fontSizeFormContent);
     await prefs.setInt('max_title_length', _maxTitleLength);
     await prefs.setInt('alignment_column', _alignmentColumn);
+    await prefs.setBool('force_two_decimals', _forceTwoDecimals);
     await prefs.setStringList('custom_palette', _customPalette.map((c) => c.toARGB32().toString()).toList());
     if (mounted) Navigator.pop(context);
   }
@@ -148,6 +151,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _buildSectionTitle('Матрица'),
               _buildNumberInput(title: 'Брой редове текст', controller: _gridLinesController, min: 1, max: 20, onChanged: (val) => setState(() => _maxLinesGrid = val)),
               _buildSwitchInput(title: 'Компактен вид', value: _compactGridView, onChanged: (val) => setState(() => _compactGridView = val)),
+              _buildSwitchInput(title: 'Суми с 2 знака', value: _forceTwoDecimals, onChanged: (val) => setState(() => _forceTwoDecimals = val)),
               const SizedBox(height: 10),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
               _buildSectionTitle('Бележки на основния екран'),

@@ -50,6 +50,8 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   int _alignmentColumn = 30;
   bool _isAutoFormatting = false;
   int _isCompleted = 0;
+  bool _forceTwoDecimals = true;
+  bool _canPop = false;
   int _appColor = const Color(0xFFFF5E00).toARGB32();
   final List<Color> _noteColors = [
     Colors.white,
@@ -94,6 +96,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       _fontSizeContent = prefs.getDouble('form_content_size') ?? 16;
       _appColor = prefs.getInt('bg_color') ?? const Color(0xFFFF5E00).toARGB32();
       _alignmentColumn = prefs.getInt('alignment_column') ?? 30;
+      _forceTwoDecimals = prefs.getBool('force_two_decimals') ?? true;
       final customList = prefs.getStringList('custom_palette') ?? [];
       final customColors = customList.map((s) => Color(int.parse(s))).toList();
       for (var c in customColors) { if (!_noteColors.contains(c)) _noteColors.add(c); }
@@ -133,6 +136,27 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       if (!_noteColors.contains(c)) _noteColors.add(c);
     }
     if (!_noteColors.contains(_selectedColor)) { _noteColors.add(_selectedColor); }
+  }
+
+  // Проверява дали има незапазени промени в текущата бележка спрямо оригиналните данни.
+  bool _hasChanges() {
+    if (widget.item == null) {
+      return _titleController.text.trim().isNotEmpty || _contentController.text.trim().isNotEmpty || _imagePath != null;
+    }
+    final String oldTitle = widget.item!['title']?.toString() ?? "";
+    final String oldContent = widget.item!['content']?.toString() ?? "";
+    final String? oldImage = widget.item!['imagePath'];
+    final int oldColor = widget.item!['color'] ?? 0;
+    final String oldTags = widget.item!['tags']?.toString() ?? "";
+    
+    bool tagsChanged = _selectedTags.join(', ').trim() != oldTags.trim();
+    bool colorChanged = oldColor != 0 && _selectedColor.toARGB32() != oldColor;
+    
+    return _titleController.text.trim() != oldTitle.trim() || 
+           _contentController.text.trim() != oldContent.trim() ||
+           _imagePath != oldImage ||
+           colorChanged ||
+           tagsChanged;
   }
 
   // Показва интерактивен диалог за управление и добавяне на етикети към бележката.
@@ -346,6 +370,12 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       Match m = matches[i];
       String prefix = m.group(1)!.trimRight();
       String numStr = m.group(2)!;
+      
+      if (_forceTwoDecimals) {
+        double? val = double.tryParse(numStr.replaceAll(',', '.'));
+        if (val != null) numStr = val.toStringAsFixed(2);
+      }
+      
       String intPart = numStr.contains('.') ? numStr.split('.')[0] : (numStr.contains(',') ? numStr.split(',')[0] : numStr);
       int numberStartCol = baseCol + (maxIntLen - intPart.length);
       int dotsCount = numberStartCol - prefix.length - 2;
@@ -524,6 +554,10 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     if (match == null) return;
     String prefix = completedLine.substring(0, match.start).trimRight();
     String number = match.group(1)!;
+    if (_forceTwoDecimals) {
+      double? val = double.tryParse(number.replaceAll(',', '.'));
+      if (val != null) number = val.toStringAsFixed(2);
+    }
     
     // Ensure checkbox in prefix is converted to Unicode
     Match? cMatch = checkPat.firstMatch(prefix);
@@ -763,10 +797,14 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       },
       // Предотвратява случайно излизане от екрана при наличие на незапазени промени.
       child: PopScope(
-      canPop: false,
+      canPop: _canPop,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
-        if (!_isEditing || (_titleController.text.trim().isEmpty && _contentController.text.trim().isEmpty)) { Navigator.of(context).pop(); return; }
+        if (!_isEditing || !_hasChanges()) { 
+          setState(() { _canPop = true; });
+          WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) Navigator.of(context).pop(); });
+          return; 
+        }
         final bool shouldPop = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
@@ -782,7 +820,10 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
             ],
           ),
         ) ?? false;
-        if (shouldPop && context.mounted) Navigator.of(context).pop();
+        if (shouldPop && mounted) {
+          setState(() { _canPop = true; });
+          WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) Navigator.of(context).pop(); });
+        }
       },
       child: Scaffold(
         backgroundColor: _selectedColor,
@@ -790,6 +831,10 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
           backgroundColor: _selectedColor,
           elevation: 0,
           foregroundColor: _textColor,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => Navigator.maybePop(context),
+          ),
           title: Text(_isEditing ? (widget.item?['id'] == null ? 'Нова бележка' : 'Редактиране') : 'Преглед', style: TextStyle(color: _textColor)),
           actions: [
             if (!_isEditing) IconButton(icon: const Icon(Icons.calculate_outlined), color: _textColor, onPressed: _calculateNote, tooltip: 'Калкулатор'),
@@ -804,7 +849,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
               children: [
                 Expanded(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.zero,
                     child: SelectionArea(
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
@@ -833,8 +878,9 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                               ),
                             const SizedBox(height: 8),
                             Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(color: _areaColor, borderRadius: BorderRadius.circular(8)),
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(color: _areaColor),
                               child: _isEditing 
                                 ? Stack(
                                     alignment: Alignment.centerRight,
@@ -873,87 +919,87 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                               ),
                             const SizedBox(height: 4),
                             Container(
-                              padding: const EdgeInsets.all(10),
-                              width: double.infinity,
-                              decoration: BoxDecoration(color: _areaColor, borderRadius: BorderRadius.circular(8)),
-                              child: _isEditing 
-                                ? Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          IconButton(icon: const Icon(Icons.keyboard_arrow_left), onPressed: _moveToLineStart, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Начало на ред'),
-                                          const Spacer(),
-                                          IconButton(icon: const Icon(Icons.keyboard_arrow_right), onPressed: _moveToLineEndOrTab, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Край на ред / Таб'),
-                                          const SizedBox(width: 8),
-                                          IconButton(icon: const Icon(Icons.keyboard_arrow_down), onPressed: _duplicateCurrentLine, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Дублирай реда'),
-                                          const SizedBox(width: 8),
-                                          IconButton(icon: const Icon(Icons.close), onPressed: _deleteCurrentLine, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Изтрий реда'),
-                                        ],
-                                      ),
-                                      TextField(
-                                        controller: _contentController, 
-                                        focusNode: _contentFocusNode, 
-                                        maxLines: null, 
-                                        style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.0), 
-                                        decoration: InputDecoration(hintText: 'Съдържание...', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor), contentPadding: EdgeInsets.zero),
-                                        onChanged: _onContentChanged,
-                                        onSubmitted: (v) => _save(),
-                                        contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
-                                      ),
-                                    ],
-                                  )
-                                : Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: _contentController.text.split('\n').asMap().entries.map((e) {
-                                        final line = e.value;
-                                        final index = e.key;
-                                        final checkMatch = RegExp(r'^([☐☑]|\[\s?[xXvV]?\s?\])\s+').firstMatch(line);
-                                        if (checkMatch != null) {
-                                          final isChecked = line.startsWith('☑') || checkMatch.group(0)!.contains(RegExp(r'[xv]'));
-                                          return InkWell(
-                                            onTap: () => _toggleCheckboxLine(index),
-                                            child: Container(
-                                              width: double.infinity,
-                                              padding: const EdgeInsets.symmetric(vertical: 2),
-                                              child: Row(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Icon(isChecked ? Icons.check_box : Icons.check_box_outline_blank, size: 22, color: _textColor),
-                                                  const SizedBox(width: 8),
-                                                  Expanded(child: Text(
-                                                    line.substring(checkMatch.end),
-                                                    style: TextStyle(fontSize: _fontSizeContent, color: _textColor, decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.2),
-                                                  )),
-                                                ],
-                                              ),
-                                            ),
-                                          );
-                                        }
-                                        if (RegExp(r'\.{2,}').hasMatch(line)) {
-                                          return SelectableText(
-                                            line,
-                                            style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.2, fontFamily: 'monospace'),
-                                            contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
-                                          );
-                                        }
-                                        final hasLink = RegExp(r'https?://|www\.').hasMatch(line);
-                                        if (hasLink) {
-                                          return SelectableLinkify(
-                                            text: line,
-                                            onOpen: _onLinkOpen,
-                                            style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.2),
-                                            linkStyle: TextStyle(color: _textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue),
-                                            contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
-                                          );
-                                        }
-                                        return SelectableText(
-                                          line,
-                                          style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.2),
-                                          contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
-                                        );
-                                      }).toList(),
-                                  ),
+                               padding: const EdgeInsets.all(16),
+                               width: double.infinity,
+                               decoration: BoxDecoration(color: _areaColor),
+                               child: _isEditing 
+                                 ? Column(
+                                     crossAxisAlignment: CrossAxisAlignment.start,
+                                     children: [
+                                       Row(
+                                         children: [
+                                           IconButton(icon: const Icon(Icons.keyboard_arrow_left), onPressed: _moveToLineStart, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Начало на ред'),
+                                           const Spacer(),
+                                           IconButton(icon: const Icon(Icons.keyboard_arrow_right), onPressed: _moveToLineEndOrTab, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Край на ред / Таб'),
+                                           const SizedBox(width: 8),
+                                           IconButton(icon: const Icon(Icons.keyboard_arrow_down), onPressed: _duplicateCurrentLine, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Дублирай реда'),
+                                           const SizedBox(width: 8),
+                                           IconButton(icon: const Icon(Icons.close), onPressed: _deleteCurrentLine, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Изтрий реда'),
+                                         ],
+                                       ),
+                                       TextField(
+                                         controller: _contentController, 
+                                         focusNode: _contentFocusNode, 
+                                         maxLines: null, 
+                                         style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.2), 
+                                         decoration: InputDecoration(hintText: 'Съдържание...', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor), contentPadding: EdgeInsets.zero),
+                                         onChanged: _onContentChanged,
+                                         onSubmitted: (v) => _save(),
+                                         contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
+                                       ),
+                                     ],
+                                   )
+                                 : Column(
+                                     crossAxisAlignment: CrossAxisAlignment.start,
+                                       children: _contentController.text.split('\n').asMap().entries.map((e) {
+                                         final line = e.value;
+                                         final index = e.key;
+                                         final checkMatch = RegExp(r'^([☐☑]|\[\s?[xXvV]?\s?\])\s+').firstMatch(line);
+                                         if (checkMatch != null) {
+                                           final isChecked = line.startsWith('☑') || checkMatch.group(0)!.contains(RegExp(r'[xv]'));
+                                           return InkWell(
+                                             onTap: () => _toggleCheckboxLine(index),
+                                             child: Container(
+                                               width: double.infinity,
+                                               padding: const EdgeInsets.symmetric(vertical: 2),
+                                               child: Row(
+                                                 crossAxisAlignment: CrossAxisAlignment.start,
+                                                 children: [
+                                                   Icon(isChecked ? Icons.check_box : Icons.check_box_outline_blank, size: 22, color: _textColor),
+                                                   const SizedBox(width: 8),
+                                                   Expanded(child: Text(
+                                                     line.substring(checkMatch.end),
+                                                     style: TextStyle(fontSize: _fontSizeContent, color: _textColor, decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.0, fontFamily: line.contains('..') ? 'monospace' : null),
+                                                   )),
+                                                 ],
+                                               ),
+                                             ),
+                                           );
+                                         }
+                                         if (RegExp(r'\.{2,}').hasMatch(line)) {
+                                           return SelectableText(
+                                             line,
+                                             style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.0, fontFamily: 'monospace'),
+                                             contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
+                                           );
+                                         }
+                                         final hasLink = RegExp(r'https?://|www\.').hasMatch(line);
+                                         if (hasLink) {
+                                           return SelectableLinkify(
+                                             text: line,
+                                             onOpen: _onLinkOpen,
+                                             style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.0, fontFamily: line.contains('..') ? 'monospace' : null),
+                                             linkStyle: TextStyle(color: _textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue),
+                                             contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
+                                           );
+                                         }
+                                         return SelectableText(
+                                           line,
+                                           style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.2, fontFamily: line.contains('..') ? 'monospace' : null),
+                                           contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
+                                         );
+                                       }).toList(),
+                                   ),
                             ),
                             if (_isEditing && _imagePath != null && _isLocalCopy == 0)
                               Padding(
