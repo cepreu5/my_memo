@@ -16,12 +16,14 @@ import 'package:http/http.dart' as http;
 import 'fly_menu.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 
+// Входна точка на приложението, която инициализира Flutter средата и зарежда стартовия екран.
 void main() {
   final binding = WidgetsFlutterBinding.ensureInitialized();
   FlutterNativeSplash.preserve(widgetsBinding: binding);
   runApp(const BusinessOrganizerApp());
 }
 
+// Главен StatelessWidget, който конфигурира темата и задава MainListScreen за начален екран.
 class BusinessOrganizerApp extends StatelessWidget {
   const BusinessOrganizerApp({super.key});
   @override
@@ -35,12 +37,14 @@ class BusinessOrganizerApp extends StatelessWidget {
   }
 }
 
+// StatefulWidget, който дефинира основния екран за списъка с бележки.
 class MainListScreen extends StatefulWidget {
   const MainListScreen({super.key});
   @override
   State<MainListScreen> createState() => _MainListScreenState();
 }
 
+// Основният клас за състояние, управляващ данните, филтрите, настройките и жизнения цикъл на приложението.
 class _MainListScreenState extends State<MainListScreen> {
   final dbHelper = DatabaseHelper();
   List<Map<String, dynamic>> _allItems = [];
@@ -70,6 +74,7 @@ class _MainListScreenState extends State<MainListScreen> {
     const Color(0xFFFFC93C), const Color(0xFF6A2C70), const Color(0xFFB83B5E), 
     const Color(0xFF005082), Colors.black,
   ];
+  // Помощен метод, който изчислява контрастен цвят на текста спрямо фоновия цвят на бележката.
   Color _contrast(Color background, Color ifBright, Color ifDark) {
     return background.computeLuminance() > 0.5 ? ifBright : ifDark;
   }
@@ -83,6 +88,7 @@ class _MainListScreenState extends State<MainListScreen> {
     _initializeApp();
   }
 
+  // Инициализира системните компоненти, зарежда настройките и слуша за споделено съдържание от други приложения.
   Future<void> _initializeApp() async {
     try {
       await CrossPlatformVideoThumbnails.initialize();
@@ -104,6 +110,7 @@ class _MainListScreenState extends State<MainListScreen> {
     }
   }
 
+  // Зарежда потребителските предпочитания (размери на шрифтове, цветове, изгледи) от SharedPreferences.
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
@@ -139,6 +146,7 @@ class _MainListScreenState extends State<MainListScreen> {
     super.dispose();
   }
 
+  // Обработва входящи мултимедийни файлове (снимки, видео) при споделяне към приложението.
   Future<void> _handleSharedMedia(List<SharedMediaFile> media) async {
     if (!media.isNotEmpty) return;
     final sharedFile = media.first;
@@ -156,6 +164,7 @@ class _MainListScreenState extends State<MainListScreen> {
     return match?.group(1);
   }
 
+  // Анализира споделен текст за линкове или YouTube ID и подготвя създаването на нова бележка.
   Future<void> _handleSharedText(String text) async {
     if (text.isEmpty) return;
     String? youtubeId = _extractYoutubeId(text);
@@ -179,16 +188,31 @@ class _MainListScreenState extends State<MainListScreen> {
     final urlRegExp = RegExp(r'(https?:\/\/[^\s]+|www\.[^\s]+)');
     final match = urlRegExp.firstMatch(text);
     if (match != null) {
-      String textPart = text.substring(0, match.start).trim();
-      String urlPart = text.substring(match.start).trim();
-      if (textPart.length > _maxTitleLength) {
-        finalTitle = title;
-        finalContent = '$textPart\n$urlPart';
-      } else if (textPart.isNotEmpty) {
-        finalTitle = '$title$textPart';
+      String urlPart = match.group(0)!;
+      String beforeUrl = text.substring(0, match.start).trim();
+      String afterUrl = text.substring(match.end).trim();
+      
+      if (beforeUrl.isEmpty && afterUrl.isEmpty) {
         finalContent = urlPart;
+      } else if (beforeUrl.isNotEmpty && afterUrl.isEmpty) {
+        if (beforeUrl.length > _maxTitleLength) {
+          finalTitle = title;
+          finalContent = '$beforeUrl\n$urlPart';
+        } else {
+          finalTitle = '$title$beforeUrl';
+          finalContent = urlPart;
+        }
+      } else if (beforeUrl.isEmpty && afterUrl.isNotEmpty) {
+        finalContent = '$urlPart\n$afterUrl';
       } else {
-        finalContent = urlPart;
+        // Both before and after are not empty
+        if (beforeUrl.length > _maxTitleLength) {
+          finalTitle = title;
+          finalContent = '$beforeUrl\n$urlPart\n$afterUrl';
+        } else {
+          finalTitle = '$title$beforeUrl';
+          finalContent = '$urlPart\n$afterUrl';
+        }
       }
     } else {
       if (text.length > _maxTitleLength) {
@@ -202,6 +226,7 @@ class _MainListScreenState extends State<MainListScreen> {
     _openNoteForm(initialData: { 'content': finalContent, 'title': finalTitle, 'imagePath': thumbPath, 'id': null, 'color': null, 'isCompleted': 0, 'tags': null });
   }
 
+  // Обновява списъка с бележки чрез заявка към локалната база данни SQLite.
   Future<void> _refreshItems() async {
     try {
       final data = await dbHelper.queryAllRows();
@@ -210,6 +235,7 @@ class _MainListScreenState extends State<MainListScreen> {
     } catch (e) { debugPrint("Грешка БД: $e"); }
   }
 
+  // Събира и поддържа списък от всички уникални етикети, използвани в наличните бележки.
   void _updateUniqueTags() {
     final Set<String> tagsSet = {};
     for (var item in _allItems) {
@@ -225,6 +251,7 @@ class _MainListScreenState extends State<MainListScreen> {
     setState(() { _allExistingTags = tagsSet; _selectedFilterTags.removeWhere((tag) => !tagsSet.contains(tag)); });
   }
 
+  // Филтрира и сортира бележките според търсен текст, избрани етикети, период, цвят или статус на задача.
   void _filterItems(String query) {
     final lowercaseQuery = query.trim().toLowerCase();
     setState(() {
@@ -266,6 +293,7 @@ class _MainListScreenState extends State<MainListScreen> {
     });
   }
 
+  // Показва диалогов прозорец за детайлно филтриране и промяна на реда на сортиране.
   void _showFilterDialog() {
     showDialog(
       context: context,
@@ -360,7 +388,6 @@ class _MainListScreenState extends State<MainListScreen> {
                         }).toList(),
                       ),
                     ),
-                    // Divider(color: contrastColor.withValues(alpha: 0.2)),
                     InkWell(
                       onTap: () {
                         setState(() { _filterTasksOnly = !_filterTasksOnly; });
@@ -371,20 +398,15 @@ class _MainListScreenState extends State<MainListScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 4.0),
                         child: Row(
                           children: [
-                            Icon(Icons.task_alt, color: contrastColor),
+                            Icon(Icons.checklist, size: 20, color: contrastColor),
                             const SizedBox(width: 10),
                             Expanded(child: Text("Само задачи", style: TextStyle(color: contrastColor))),
-                            Checkbox(
+                            IconButton(
                               visualDensity: VisualDensity.compact,
-                              value: _filterTasksOnly,
-                              activeColor: contrastColor,
-                              side: BorderSide(
-                                color: contrastColor,
-                                width: 2.0,
-                              ),
-                              checkColor: Color(_appColor),
-                              onChanged: (val) {
-                                setState(() { _filterTasksOnly = val ?? false; });
+                              padding: EdgeInsets.zero,
+                              icon: Icon(_filterTasksOnly ? Icons.check_box : Icons.check_box_outline_blank, size: 24, color: contrastColor),
+                              onPressed: () {
+                                setState(() { _filterTasksOnly = !_filterTasksOnly; });
                                 _filterItems(_searchController.text);
                                 setModalState(() {});
                               },
@@ -403,17 +425,15 @@ class _MainListScreenState extends State<MainListScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 4.0),
                         child: Row(
                           children: [
-                            Icon(Icons.format_list_numbered, color: contrastColor),
+                            const Icon(Icons.format_list_numbered, color: Colors.transparent), // Placeholder or alternative icon
                             const SizedBox(width: 10),
                             Expanded(child: Text("Последователен ред", style: TextStyle(color: contrastColor))),
-                            Checkbox(
+                            IconButton(
                               visualDensity: VisualDensity.compact,
-                              value: _sortById,
-                              activeColor: contrastColor,
-                              side: BorderSide(color: contrastColor, width: 2.0),
-                              checkColor: Color(_appColor),
-                              onChanged: (val) {
-                                setState(() { _sortById = val ?? false; });
+                              padding: EdgeInsets.zero,
+                              icon: Icon(_sortById ? Icons.check_box : Icons.check_box_outline_blank, size: 24, color: contrastColor),
+                              onPressed: () {
+                                setState(() { _sortById = !_sortById; });
                                 _filterItems(_searchController.text);
                                 setModalState(() {});
                               },
@@ -457,7 +477,7 @@ class _MainListScreenState extends State<MainListScreen> {
               ),
               actions: [
                 TextButton(onPressed: () {
-                  setState(() { _startDate = null; _endDate = null; _filterColor = null; _filterTasksOnly = false; _reverseOrder = false; _sortById = false; });
+                  setState(() { _startDate = null; _endDate = null; _filterColor = null; _filterTasksOnly = false; _reverseOrder = false; _sortById = false; _selectedFilterTags.clear(); });
                   _filterItems(_searchController.text);
                   Navigator.pop(ctx);
                 }, child: Text("Изчисти всички", style: TextStyle(color: secondaryContrast))),
@@ -470,6 +490,7 @@ class _MainListScreenState extends State<MainListScreen> {
     );
   }
 
+  // Модален прозорец за бързо добавяне и премахване на етикети към конкретна бележка.
   void _showTagsModal(Map<String, dynamic> item) {
     List<String> currentTags = (item['tags'] ?? '').toString().split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
     showDialog(
@@ -575,6 +596,68 @@ class _MainListScreenState extends State<MainListScreen> {
     );
   }
 
+  // Модален прозорец за глобално филтриране по избрани етикети.
+  void _showGlobalTagsModal() {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final Color contrastColor = _contrast(Color(_appColor), Colors.black, Colors.white);
+            final Color secondaryContrast = _contrast(Color(_appColor), Colors.black54, Colors.white70);
+            List<String> allTags = _allExistingTags.toList()..sort();
+            return AlertDialog(
+              backgroundColor: Color(_appColor),
+              title: Text('Филтър по етикети', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: contrastColor)),
+              content: allTags.isEmpty 
+                ? Padding(padding: const EdgeInsets.all(20), child: Text('Няма налични етикети.', style: TextStyle(color: secondaryContrast)))
+                : SingleChildScrollView(
+                    child: Wrap(
+                      spacing: 4, runSpacing: 4,
+                      children: allTags.map((tag) {
+                        bool isSelected = _selectedFilterTags.contains(tag);
+                        return FilterChip(
+                          visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          padding: EdgeInsets.zero,
+                          labelPadding: const EdgeInsets.symmetric(horizontal: 4.0),
+                          label: Text(tag, style: const TextStyle(fontSize: 10)),
+                          selected: isSelected,
+                          onSelected: (val) {
+                            setState(() {
+                              if (val) { if (!_selectedFilterTags.contains(tag)) _selectedFilterTags.add(tag); } 
+                              else { _selectedFilterTags.remove(tag); }
+                              _filterItems(_searchController.text);
+                            });
+                            setModalState(() {});
+                          },
+                          showCheckmark: false,
+                          selectedColor: Colors.yellow[700],
+                          backgroundColor: Colors.cyan[200],
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          side: isSelected ? const BorderSide(color: Colors.cyan, width: 1) : BorderSide(color: Colors.cyan[400]!),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    setState(() { _selectedFilterTags.clear(); _filterItems(_searchController.text); });
+                    setModalState(() {});
+                  },
+                  child: const Text('Изчисти', style: TextStyle(color: Colors.redAccent)),
+                ),
+                ElevatedButton(onPressed: () => Navigator.pop(ctx), child: const Text("Готово")),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // Управлява навигацията към екрана за редактиране или преглед на бележка.
   void _openNoteForm({Map<String, dynamic>? initialData, int? index, bool startInEditMode = false}) async {
     FocusScope.of(context).unfocus();
     if (!mounted) return;
@@ -589,16 +672,19 @@ class _MainListScreenState extends State<MainListScreen> {
     if (mounted) _refreshItems();
   }
 
+  // Отваря екрана с общи настройки на приложението.
   Future<void> _goToSettings() async {
     await Navigator.push(context, MaterialPageRoute(builder: (c) => const SettingsScreen()));
     if (mounted) _loadSettings();
   }
 
+  // Превключва между списъчен и матричен изглед на бележките и записва избора.
   Future<void> _toggleView() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() { _isGridView = !_isGridView; prefs.setBool('is_grid_view', _isGridView); });
   }
 
+  // Променя статуса на завършеност (checkbox) на бележки, които са маркирани като задачи.
   Future<void> _toggleComplete(Map<String, dynamic> item) async {
     final currentStatus = item['isCompleted'] ?? 0;
     int newStatus;
@@ -610,6 +696,7 @@ class _MainListScreenState extends State<MainListScreen> {
   }
 
   @override
+  // Основният метод за изграждане на потребителския интерфейс, включващ търсачка, лента с етикети и списък с бележки.
   Widget build(BuildContext context) {
     final bgColor = Color(_appBackgroundColor);
     final isDarkBg = bgColor.computeLuminance() < 0.5;
@@ -694,6 +781,7 @@ class _MainListScreenState extends State<MainListScreen> {
                     label: "Без търсене",
                   ),
                 FlyAction(icon: Icons.filter_list, onTap: _showFilterDialog, label: "Филтри"),
+                FlyAction(icon: Icons.label_outline, onTap: _showGlobalTagsModal, label: "Етикети"),
                 if (_selectedFilterTags.isNotEmpty || _startDate != null || _filterColor != null || _filterTasksOnly || _reverseOrder)
                   FlyAction(
                     icon: Icons.label_off_outlined,
@@ -722,6 +810,7 @@ class _MainListScreenState extends State<MainListScreen> {
     );
   }
 
+  // Конструира вертикален списък от бележки за стандартния изглед.
   Widget _buildList() {
     return ListView.builder(
       padding: const EdgeInsets.all(8),
@@ -730,6 +819,7 @@ class _MainListScreenState extends State<MainListScreen> {
     );
   }
 
+  // Изгражда двуколонен "шахматен" изглед за бележките в режим матрица.
   Widget _buildGrid() {
     List<Map<String, dynamic>> leftColumn = [];
     List<Map<String, dynamic>> rightColumn = [];
@@ -749,6 +839,7 @@ class _MainListScreenState extends State<MainListScreen> {
     );
   }
 
+  // Създава визуалната карта на всяка бележка, включваща заглавие, съдържание, изображения и жестове за изтриване.
   Widget _buildNoteCard(Map<String, dynamic> item, bool isGrid) {
     final bool isDone = item['isCompleted'] == 1;
     final Color cardColor = item['color'] != null ? Color(item['color']) : Colors.white;
@@ -761,16 +852,20 @@ class _MainListScreenState extends State<MainListScreen> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (item['isCompleted'] != 0) ...[
-                SizedBox(width: 24, height: 24, child: Checkbox(value: isDone, side: BorderSide(color: textColor.withValues(alpha: 0.5)), checkColor: cardColor, activeColor: textColor, onChanged: (_) => _toggleComplete(item))),
-                const SizedBox(width: 4),
+          if ((item['title'] ?? '').toString().trim().isNotEmpty || item['isCompleted'] != 0)
+            Row( // заглавие и чекбокс
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (item['isCompleted'] != 0) ...[ // отметки
+                  GestureDetector(
+                    onTap: () => _toggleComplete(item),
+                      child: Icon(isDone ? Icons.check_box : Icons.check_box_outline_blank, size: 22, color: textColor),
+                  ),
+                ],
+                if ((item['title'] ?? '').toString().trim().isNotEmpty)
+                  Expanded(child: Text(item['title'], maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.bold, fontSize: _fontSizeTitle, color: textColor, decoration: isDone ? TextDecoration.lineThrough : null))),
               ],
-              Expanded(child: Text(item['title'] ?? 'Без заглавие', maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.bold, fontSize: _fontSizeTitle, color: textColor, decoration: isDone ? TextDecoration.lineThrough : null))),
-            ],
-          ),
+            ),
           if ((item['content'] ?? '').toString().trim().isNotEmpty) ...[
             const SizedBox(height: 4),
             _buildContentWithLinks(item['content'] ?? '', secondaryTextColor, textColor, isGrid),
@@ -782,7 +877,7 @@ class _MainListScreenState extends State<MainListScreen> {
                 children: [
                   Icon(Icons.calendar_today, size: 12, color: secondaryTextColor),
                   const SizedBox(width: 4),
-                  Expanded(child: Text(_formatDateTime(item['reminderTime']), style: TextStyle(fontSize: 10, color: secondaryTextColor))), // FontWeight.bold
+                  Expanded(child: Text(_formatDateTime(item['reminderTime']), style: TextStyle(fontSize: 9, color: secondaryTextColor))), // FontWeight.bold @@ дата
                 ],
               ),
             ),
@@ -866,19 +961,34 @@ class _MainListScreenState extends State<MainListScreen> {
     );
   }
 
+  // Изчислява точната ширина на текст за целите на подравняването в колони.
+  double _getTextWidth(String text, double fontSize) {
+    final tp = TextPainter(
+      text: TextSpan(text: text, style: TextStyle(fontSize: fontSize, fontFamily: 'monospace')),
+      maxLines: 1,
+      textDirection: TextDirection.ltr,
+    )..layout();
+    return tp.width;
+  }
+  // Специализиран метод за изобразяване на съдържанието, поддържащ линкове, чекбоксове и подравнени ценови списъци.
   Widget _buildContentWithLinks(String content, Color secondaryTextColor, Color textColor, bool isGrid) {
     final linkStyle = TextStyle(color: textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue, decoration: TextDecoration.none);
-    final priceExp = RegExp(r'^(.*?)\s*\.{2,}\s*(\d+(?:[\.,]\d+)?)\s*$', multiLine: true);
-    if (priceExp.hasMatch(content)) {
-      final lines = content.split('\n');
-      List<Widget> widgets = [];
-      int displayLines = 0;
-      double maxIntWidth = 0;
-      double maxFracWidth = 0;
-      int maxAllowedLines = isGrid ? _maxLinesGrid : _maxLinesList;
-      
+    // Matches: (prefix) (3+ spaces OR 2+ dots) (price)
+    final priceExp = RegExp(r'^(.*?)(?:\s{3,}|\s*\.{2,}\s*)(\d+(?:[\.,]\d+)?)\s*$', multiLine: true);
+    final checkPattern = RegExp(r'^([☐☑]|\[\s?[xXvV]?\s?\])\s+');
+    
+    final lines = content.split('\n');
+    List<Widget> widgets = [];
+    int displayLines = 0;
+    int maxAllowedLines = isGrid ? _maxLinesGrid : _maxLinesList;
+
+    bool hasPriceLines = priceExp.hasMatch(content);
+    double maxIntWidth = 0;
+    double maxFracWidth = 0;
+
+    if (hasPriceLines) {
       for (var line in lines) {
-        Match? m = RegExp(r'^(.*?)\s*\.{2,}\s*(\d+(?:[\.,]\d+)?)\s*$').firstMatch(line);
+        Match? m = priceExp.firstMatch(line);
         if (m != null) {
           String price = m.group(2)!;
           String intP = price.contains('.') ? price.split('.')[0] : (price.contains(',') ? price.split(',')[0] : price);
@@ -889,125 +999,137 @@ class _MainListScreenState extends State<MainListScreen> {
           if (fw > maxFracWidth) maxFracWidth = fw;
         }
       }
-      double intWidth = maxIntWidth + 2; 
-      double fracWidth = maxFracWidth;   
+    }
+
+    double intWidth = maxIntWidth + 2; 
+    double fracWidth = maxFracWidth;   
+
+    for (var line in lines) {
+      if (displayLines >= maxAllowedLines) break;
       
-      for (var line in lines) {
-        if (displayLines >= maxAllowedLines) break;
-        Match? m = RegExp(r'^(.*?)\s*\.{2,}\s*(\d+(?:[\.,]\d+)?)\s*$').firstMatch(line);
-        if (m != null) {
-          String prefix = m.group(1)!.trimRight();
-          String price = m.group(2)!;
-          String intP = price.contains('.') ? price.split('.')[0] : (price.contains(',') ? price.split(',')[0] : price);
-          String fracP = price.contains('.') ? ".${price.split('.')[1]}" : (price.contains(',') ? ",${price.split(',')[1]}" : "");
-          String leaderText = prefix.isEmpty ? "." * 150 : "${prefix.replaceAll(' ', '\u00A0')}\u00A0${'.' * 150}";
-          widgets.add(Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Expanded(
+      Match? checkMatch = checkPattern.firstMatch(line);
+      bool isChecked = false;
+      String cleanLine = line;
+      if (checkMatch != null) {
+        isChecked = line.startsWith('☑') || checkMatch.group(1)!.contains(RegExp(r'[xXvV]'));
+        cleanLine = line.substring(checkMatch.end);
+      }
+
+      Match? m = priceExp.firstMatch(line);
+      if (m != null) {
+        String prefix = m.group(1)!.trimRight();
+        // Remove checkbox from prefix if present
+        Match? pCheck = checkPattern.firstMatch(prefix);
+        if (pCheck != null) prefix = prefix.substring(pCheck.end).trim();
+
+        String price = m.group(2)!;
+        String intP = price.contains('.') ? price.split('.')[0] : (price.contains(',') ? price.split(',')[0] : price);
+        String fracP = price.contains('.') ? ".${price.split('.')[1]}" : (price.contains(',') ? ",${price.split(',')[1]}" : "");
+        
+        widgets.add(Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            if (checkMatch != null) ...[
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Icon(isChecked ? Icons.check_box : Icons.check_box_outline_blank, size: 18, color: secondaryTextColor),
+              ),
+            ],
+            if (prefix.isNotEmpty)
+              Flexible(
                 child: Text(
-                  leaderText,
+                  prefix.replaceAll(' ', '\u00A0'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor, fontFamily: 'monospace'),
+                  style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor, fontFamily: 'monospace', decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.2),
                 ),
               ),
-              const SizedBox(width: 4),
-              SizedBox(
-                width: intWidth,
-                child: Text(
-                  intP,
-                  textAlign: TextAlign.right,
-                  maxLines: 1,
-                  overflow: TextOverflow.visible,
-                  style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor, fontFamily: 'monospace'),
-                ),
+            if (!isGrid) 
+              Text(
+                ' ${'.' * 150} ',
+                maxLines: 1,
+                overflow: TextOverflow.clip,
+                style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor, fontFamily: 'monospace', height: 1.2),
+              )
+            else
+              const Spacer(),
+            const SizedBox(width: 4),
+            SizedBox(
+              width: intWidth,
+              child: Text(
+                intP,
+                textAlign: TextAlign.right,
+                maxLines: 1,
+                overflow: TextOverflow.visible,
+                style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor, fontFamily: 'monospace', decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.2),
               ),
-              if (fracP.isNotEmpty)
-                SizedBox(
-                  width: fracWidth,
-                  child: Text(
-                    fracP,
-                    textAlign: TextAlign.left,
-                    maxLines: 1,
-                    overflow: TextOverflow.visible,
-                    style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor, fontFamily: 'monospace'),
-                  ),
-                ),
-            ],
-          ));
-          displayLines++;
-        } else {
-          widgets.add(Linkify(
-            text: line,
-            onOpen: (link) async {
-              final url = Uri.parse(link.url);
-              if (await canLaunchUrl(url)) { await launchUrl(url, mode: LaunchMode.externalApplication); }
-            },
-            maxLines: maxAllowedLines - displayLines > 0 ? maxAllowedLines - displayLines : 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor),
-            linkStyle: linkStyle,
-          ));
-          displayLines++;
-        }
-      }
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: widgets,
-      );
-    }
-    final urlRegExp = RegExp(r'(https?:\/\/[^\s]+|www\.[^\s]+)');
-    final match = urlRegExp.firstMatch(content);
-    if (match != null) {
-      final textPart = content.substring(0, match.start).trim();
-      final urlPart = content.substring(match.start).trim();
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (textPart.isNotEmpty)
-            Text(
-              textPart,
-              maxLines: isGrid ? _maxLinesGrid : _maxLinesList,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor),
             ),
-          Linkify(
-            text: urlPart,
-            onOpen: (link) async {
-              final url = Uri.parse(link.url);
-              if (await canLaunchUrl(url)) { await launchUrl(url, mode: LaunchMode.externalApplication); }
-            },
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor),
-            linkStyle: linkStyle,
-          ),
-        ],
-      );
+            SizedBox(
+              width: fracWidth,
+              child: Text(
+                fracP,
+                textAlign: TextAlign.left,
+                maxLines: 1,
+                overflow: TextOverflow.visible,
+                style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor, fontFamily: 'monospace', decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.2),
+              ),
+            ),
+          ],
+        ));
+        displayLines++;
+      } else {
+        final hasLink = RegExp(r'https?://|www\.').hasMatch(cleanLine);
+        widgets.add(Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (checkMatch != null) ...[
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Icon(isChecked ? Icons.check_box : Icons.check_box_outline_blank, size: 18, color: secondaryTextColor),
+              ),
+            ],
+            Expanded(
+              child: hasLink 
+                ? Linkify(
+                    text: cleanLine,
+                    onOpen: (link) async {
+                      final url = Uri.parse(link.url);
+                      if (await canLaunchUrl(url)) { await launchUrl(url, mode: LaunchMode.externalApplication); }
+                    },
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor, decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.2, fontFamily: checkMatch != null ? 'monospace' : null),
+                    linkStyle: linkStyle,
+                  )
+                : Text(
+                    cleanLine,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor, decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.0, fontFamily: checkMatch != null ? 'monospace' : null),
+                  ),
+            ),
+          ],
+        ));
+        displayLines++;
+      }
     }
-    return Linkify(
-      text: content,
-      onOpen: (link) async {
-        final url = Uri.parse(link.url);
-        if (await canLaunchUrl(url)) { await launchUrl(url, mode: LaunchMode.externalApplication); }
-      },
-      maxLines: isGrid ? _maxLinesGrid : _maxLinesList,
-      overflow: TextOverflow.ellipsis,
-      style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor),
-      linkStyle: linkStyle,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: widgets,
     );
   }
 
+  // Форматира ISO дата в четлив формат (ДД.ММ.ГГ ЧЧ:ММ) за показване в бележката.
   String _formatDateTime(String isoString) {
     try {
       final dt = DateTime.parse(isoString);
-      return "${dt.day}.${dt.month.toString().padLeft(2, '0')} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}";
+      return "${dt.day}.${dt.month.toString().padLeft(2, '0')}.${dt.year.toString().substring(2)} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}";
     } catch (e) { return ''; }
   }
 }
 
+// Помощен widget за правилно изобразяване на изображения в матричния изглед според тяхната ориентация.
 class NoteGridImage extends StatefulWidget {
   final String imagePath;
   final Color backgroundColor;

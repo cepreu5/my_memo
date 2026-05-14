@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'color_picker_helper.dart';
 
+// StatefulWidget, който дефинира екрана за създаване, редактиране и преглед на детайлите на бележка.
 class NoteFormScreen extends StatefulWidget {
   final Map<String, dynamic>? item;
   final VoidCallback onSaved;
@@ -24,6 +25,7 @@ class NoteFormScreen extends StatefulWidget {
   State<NoteFormScreen> createState() => _NoteFormScreenState();
 }
 
+// Основният клас за управление на състоянието, текстовите контролери, снимките и цветовете на бележката.
 class _NoteFormScreenState extends State<NoteFormScreen> {
   final _titleController = TextEditingController();
   final _contentController = MathHighlightController();
@@ -46,6 +48,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   List<Map<String, dynamic>> _allNotes = [];
   bool _isTask = false;
   int _alignmentColumn = 30;
+  bool _isAutoFormatting = false;
   int _isCompleted = 0;
   int _appColor = const Color(0xFFFF5E00).toARGB32();
   final List<Color> _noteColors = [
@@ -83,6 +86,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     super.dispose();
   }
 
+  // Зарежда началните данни на бележката, размерите на шрифтовете и потребителската цветова палитра.
   Future<void> _initializeData() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -113,10 +117,12 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     if (mounted) setState(() {});
   }
 
+  // Изтрива локалното копие на снимката от хранилището при промяна или изтриване.
   void _deleteCurrentFileIfLocal() {
     if (_isLocalCopy == 1 && _imagePath != null) { try { final f = File(_imagePath!); if (f.existsSync()) f.deleteSync(); } catch (e) { debugPrint("Грешка чистене файл: $e"); } }
   }
 
+  // Извлича предпочитания от потребителя цвят за нови бележки от настройките.
   Future<void> _loadDefaultColor() async {
     final prefs = await SharedPreferences.getInstance();
     final defaultColorVal = prefs.getInt('default_note_color');
@@ -129,6 +135,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     if (!_noteColors.contains(_selectedColor)) { _noteColors.add(_selectedColor); }
   }
 
+  // Показва интерактивен диалог за управление и добавяне на етикети към бележката.
   void _showTagsDialog() {
     showDialog(
       context: context,
@@ -226,6 +233,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     );
   }
 
+  // Предоставя интерфейс за изрязване и коригиране на пропорциите на избрано изображение.
   Future<String?> _cropImage(String path) async {
     CroppedFile? croppedFile = await ImageCropper().cropImage(
       sourcePath: path,
@@ -237,6 +245,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     return croppedFile?.path;
   }
 
+  // Отваря системната галерия за избор на съществуваща снимка.
   Future<void> _pickFromGallery() async {
     final picker = ImagePicker();
     try {
@@ -253,6 +262,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     } catch (e) { debugPrint("Грешка галерия: $e"); }
   }
 
+  // Стартира камерата за заснемане на ново изображение директно в бележката.
   Future<void> _pickFromCamera() async {
     final picker = ImagePicker();
     try {
@@ -275,6 +285,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     } catch (e) { debugPrint("Грешка камера: $e"); }
   }
 
+  // Позволява повторно изрязване и редактиране на вече прикачената към бележката снимка.
   Future<void> _editExistingImage() async {
     if (_imagePath == null) return;
     final croppedPath = await _cropImage(_imagePath!);
@@ -288,6 +299,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     }
   }
 
+  // Копира избраното изображение в защитената директория на приложението за постоянно съхранение.
   Future<String?> _copyImageLocally(String originalPath) async {
     try {
       final directory = await getApplicationDocumentsDirectory();
@@ -295,6 +307,10 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       final String newPath = p.join(directory.path, fileName);
       await File(originalPath).copy(newPath);
       return newPath;
+    } catch (e) { debugPrint("Грешка копиране: $e"); }
+    return null;
+  }
+  // Автоматично подравнява числовите списъци чрез добавяне на точки преди финалното записване.
   void _formatPricesBeforeSave() {
     String text = _contentController.text;
     if (text.isEmpty) return;
@@ -349,6 +365,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     }
   }
 
+  // Извършва запис на всички промени в базата данни и обновява състоянието на приложението.
   Future<void> _save({bool closeAfterSave = true}) async {
     _formatPricesBeforeSave();
     _reminderTime = DateTime.now(); // Автоматично обновяваме датата при всяко записване
@@ -377,10 +394,14 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
         await dbHelper.updateItem(data); 
       }
       widget.onSaved();
-      if (closeAfterSave && mounted) Navigator.pop(context);
+      if (closeAfterSave && mounted) {
+        setState(() => _isEditing = false);
+        Navigator.pop(context);
+      }
     } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Грешка запис: $e'), backgroundColor: Colors.red)); }
   }
 
+  // Управлява навигацията към следваща или предишна бележка чрез плъзгане по екрана.
   Future<void> _switchToNote(int index) async {
     if (index < 0 || index >= _allNotes.length) return;
     await _save(closeAfterSave: false);
@@ -390,6 +411,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     });
   }
 
+  // Реинициализира всички полета и настройки при превключване към друга бележка.
   void _initializeDataFromItem(Map<String, dynamic> item) {
     _titleController.text = item['title']?.toString() ?? "";
     _contentController.text = item['content']?.toString() ?? "";
@@ -408,6 +430,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     _isEditing = false;
   }
 
+  // Премества съдържанието на първия ред от текста в полето за заглавие.
   void _moveFirstParagraphToTitle() {
     final String content = _contentController.text.trim();
     if (content.isEmpty) return;
@@ -419,6 +442,33 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       _contentController.text = parts.sublist(1).join('\n').trim();
     });
   }
+
+  // Дублира реда, на който се намира курсорът, и го добавя на нов ред отдолу.
+  void _duplicateCurrentLine() {
+    final text = _contentController.text;
+    final selection = _contentController.selection;
+    if (!selection.isValid) return;
+    final int start = text.lastIndexOf('\n', selection.start - 1) + 1;
+    final int end = text.indexOf('\n', selection.start);
+    final int actualEnd = end == -1 ? text.length : end;
+    final String line = text.substring(start, actualEnd);
+    final String newText = text.replaceRange(actualEnd, actualEnd, '\n$line');
+    _contentController.value = TextEditingValue(text: newText, selection: TextSelection.collapsed(offset: actualEnd + line.length + 1));
+  }
+  
+  // Изтрива изцяло реда, върху който е позициониран курсорът в момента.
+  void _deleteCurrentLine() {
+    final text = _contentController.text;
+    final selection = _contentController.selection;
+    if (!selection.isValid) return;
+    final int start = text.lastIndexOf('\n', selection.start - 1) + 1;
+    final int end = text.indexOf('\n', selection.start);
+    final int actualEnd = end == -1 ? text.length : (end + 1);
+    final String newText = text.replaceRange(start, actualEnd, '');
+    _contentController.value = TextEditingValue(text: newText, selection: TextSelection.collapsed(offset: start.clamp(0, newText.length)));
+  }
+  
+  // Превръща маркираните редове в булети, номериран списък или списък с отметки.
   void _toggleList(String type) {
     final text = _contentController.text;
     final selection = _contentController.selection;
@@ -444,18 +494,66 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       if (allHaveTarget) { newLines.add(line.replaceFirst(targetPattern, '')); } 
       else {
         String cleanLine = line.replaceFirst(anyPattern, '');
-        if (type == 'bullet') newLines.add('• $cleanLine');
-        else if (type == 'number') newLines.add('${i + 1}. $cleanLine');
-        else if (type == 'check') newLines.add('☐ $cleanLine');
+        if (type == 'bullet') {
+          newLines.add('• $cleanLine');
+        } else if (type == 'number') newLines.add('${i + 1}. $cleanLine');
+        else if (type == 'check') {
+          newLines.add('☐ $cleanLine');
+        }
       }
     }
     String newJoined = newLines.join('\n');
-    _contentController.value = TextEditingValue(text: text.replaceRange(lineStart, lineEnd, newJoined), selection: TextSelection(baseOffset: lineStart, extentOffset: lineStart + newJoined.length));
+    _contentController.value = TextEditingValue(text: text.replaceRange(lineStart, lineEnd, newJoined), selection: TextSelection.collapsed(offset: lineStart + newJoined.length));
   }
+
+  // Слуша за промени в текста и прилага автоматично форматиране на цени при натискане на Enter.
+  void _onContentChanged(String newText) {
+    if (_isAutoFormatting) return;
+    final selection = _contentController.selection;
+    if (selection.start == -1) return;
+    int cursorPos = selection.start;
+    if (cursorPos == 0 || newText[cursorPos - 1] != '\n') return;
+    int lineEnd = cursorPos - 1;
+    int lineStart = newText.lastIndexOf('\n', lineEnd - 1) + 1;
+    String completedLine = newText.substring(lineStart, lineEnd);
+    RegExp checkPat = RegExp(r'^([☐☑]|\[\s?[xXvV]?\s?\])\s+');
+    if (!checkPat.hasMatch(completedLine)) return;
+    if (RegExp(r'\.{2,}').hasMatch(completedLine)) return;
+    RegExp trailingNum = RegExp(r'\s+(\d+(?:[.,]\d+)?)\s*$');
+    Match? match = trailingNum.firstMatch(completedLine);
+    if (match == null) return;
+    String prefix = completedLine.substring(0, match.start).trimRight();
+    String number = match.group(1)!;
+    
+    // Ensure checkbox in prefix is converted to Unicode
+    Match? cMatch = checkPat.firstMatch(prefix);
+    if (cMatch != null) {
+      bool isChecked = prefix.startsWith('☑') || cMatch.group(0)!.contains(RegExp(r'[xXvV]'));
+      prefix = prefix.replaceFirst(checkPat, isChecked ? '☑ ' : '☐ ');
+    } else if (completedLine.startsWith(checkPat)) {
+      // Fallback if prefix somehow missed it
+      Match? fullCMatch = checkPat.firstMatch(completedLine);
+      bool isChecked = completedLine.startsWith('☑') || fullCMatch!.group(0)!.contains(RegExp(r'[xXvV]'));
+      prefix = prefix.replaceFirst(checkPat, isChecked ? '☑ ' : '☐ ');
+    }
+
+    int dotsCount = _alignmentColumn - prefix.length - number.length - 2;
+    if (dotsCount < 2) dotsCount = 2;
+    String newLine = '$prefix ${".".padRight(dotsCount, ".")} $number';
+    String updatedText = newText.replaceRange(lineStart, lineEnd, newLine);
+    int newCursorPos = lineStart + newLine.length + 1;
+    if (newCursorPos > updatedText.length) newCursorPos = updatedText.length;
+    _isAutoFormatting = true;
+    _contentController.value = TextEditingValue(text: updatedText, selection: TextSelection.collapsed(offset: newCursorPos));
+    _isAutoFormatting = false;
+  }
+
+  // Управлява отварянето на уеб връзки (URL), открити в текста на бележката.
   void _onLinkOpen(LinkableElement link) async {
     final url = Uri.parse(link.url);
     if (await canLaunchUrl(url)) { await launchUrl(url, mode: LaunchMode.externalApplication); }
   }
+  // Сканира съдържанието за математически изрази и изчислява общата им сума.
   void _calculateNote() {
     final text = _contentController.text;
     final selection = _contentController.selection;
@@ -513,6 +611,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       }
     } catch (e) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Грешка при изчисление: $expr"))); }
   }
+  // Изпълнява самото математическо изчисление върху извлечения текстов израз.
   double _evaluateExpression(String expr) {
     final tokens = RegExp(r'\d+(\.\d+)?|[+\-*/()]').allMatches(expr.replaceAll(',', '.')).map((m) => m.group(0)!).toList();
     if (tokens.isEmpty) return 0;
@@ -524,23 +623,32 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       double b = values.removeLast();
       double a = values.removeLast();
       String op = ops.removeLast();
-      if (op == '+') values.add(a + b);
-      else if (op == '-') values.add(a - b);
+      if (op == '+') {
+        values.add(a + b);
+      } else if (op == '-') values.add(a - b);
       else if (op == '*') values.add(a * b);
       else if (op == '/') values.add(a / b);
     }
     for (var token in tokens) {
       if (RegExp(r'^\d').hasMatch(token)) { values.add(double.parse(token)); }
       else if (token == '(') { ops.add(token); }
-      else if (token == ')') { while (ops.isNotEmpty && ops.last != '(') applyOp(); if (ops.isNotEmpty) ops.removeLast(); }
+      else if (token == ')') { while (ops.isNotEmpty && ops.last != '(') {
+        applyOp();
+      } if (ops.isNotEmpty) ops.removeLast(); }
       else {
-        while (ops.isNotEmpty && precedence(ops.last) >= precedence(token)) applyOp();
+        while (ops.isNotEmpty && precedence(ops.last) >= precedence(token)) {
+          applyOp();
+        }
         ops.add(token);
       }
     }
-    while (ops.isNotEmpty) applyOp();
+    while (ops.isNotEmpty) {
+      applyOp();
+    }
     return values.isNotEmpty ? values.first : 0;
   }
+
+  // Помощен метод за бързо преместване на курсора в началото на реда.
   void _moveToLineStart() {
     final text = _contentController.text;
     final selection = _contentController.selection;
@@ -548,6 +656,8 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     int lineStart = text.lastIndexOf('\n', selection.start - 1) + 1;
     _contentController.selection = TextSelection.collapsed(offset: lineStart);
   }
+  
+  // Помощен метод за бързо преместване на курсора в края на реда или добавяне на точки (Tab).
   void _moveToLineEndOrTab() {
     final text = _contentController.text;
     final selection = _contentController.selection;
@@ -576,6 +686,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       );
     }
   }
+  // Позволява интерактивно маркиране на отметки (☐/☑) директно в режим на преглед.
   void _toggleCheckboxLine(int index) {
     final lines = _contentController.text.split('\n');
     final line = lines[index];
@@ -587,13 +698,13 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       _save(closeAfterSave: false);
     }
   }
-
   String? _extractYoutubeId(String url) {
     final regExp = RegExp(r'(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|shorts\/|.*[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})', caseSensitive: false);
     final match = regExp.firstMatch(url);
     return match?.group(1);
   }
-
+  
+  // Премахва бележката от базата данни и изтрива свързаните с нея файлове след потвърждение.
   Future<void> _deleteNote() async {
     if (widget.item?['id'] == null) return;
     final prefs = await SharedPreferences.getInstance();
@@ -624,6 +735,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     if (mounted) Navigator.of(context).pop();
   }
 
+  // Отваря прикаченото изображение или YouTube видео в пълен размер.
   void _openFullScreenImage() async {
     if (_imagePath == null) return;
     if (_extractYoutubeId(_contentController.text) != null) {
@@ -635,6 +747,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   }
 
   @override
+  // Основният метод за изграждане на интерфейса, включващ заглавие, редактор и инструменти.
   Widget build(BuildContext context) {
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
@@ -648,6 +761,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
         if (details.primaryVelocity! < 0) { _switchToNote(_currentIndex! + 1); } // Нагоре = следваща
         else if (details.primaryVelocity! > 0) { _switchToNote(_currentIndex! - 1); } // Надолу = предишна
       },
+      // Предотвратява случайно излизане от екрана при наличие на незапазени промени.
       child: PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
@@ -719,7 +833,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                               ),
                             const SizedBox(height: 8),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                              padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(color: _areaColor, borderRadius: BorderRadius.circular(8)),
                               child: _isEditing 
                                 ? Stack(
@@ -729,7 +843,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                         controller: _titleController, 
                                         maxLines: null, 
                                         style: TextStyle(fontSize: _fontSizeTitle, fontWeight: FontWeight.bold, color: _textColor), 
-                                        decoration: InputDecoration(hintText: 'Заглавие', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor), contentPadding: const EdgeInsets.only(right: 32)),
+                                        decoration: InputDecoration(hintText: 'Заглавие', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor), contentPadding: EdgeInsets.zero),
                                         contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
                                       ),
                                       if (_contentController.text.trim().isNotEmpty)
@@ -771,14 +885,19 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                           IconButton(icon: const Icon(Icons.keyboard_arrow_left), onPressed: _moveToLineStart, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Начало на ред'),
                                           const Spacer(),
                                           IconButton(icon: const Icon(Icons.keyboard_arrow_right), onPressed: _moveToLineEndOrTab, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Край на ред / Таб'),
+                                          const SizedBox(width: 8),
+                                          IconButton(icon: const Icon(Icons.keyboard_arrow_down), onPressed: _duplicateCurrentLine, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Дублирай реда'),
+                                          const SizedBox(width: 8),
+                                          IconButton(icon: const Icon(Icons.close), onPressed: _deleteCurrentLine, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Изтрий реда'),
                                         ],
                                       ),
                                       TextField(
                                         controller: _contentController, 
                                         focusNode: _contentFocusNode, 
                                         maxLines: null, 
-                                        style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.2), 
-                                        decoration: InputDecoration(hintText: 'Съдържание...', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor)), 
+                                        style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.0), 
+                                        decoration: InputDecoration(hintText: 'Съдържание...', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor), contentPadding: EdgeInsets.zero),
+                                        onChanged: _onContentChanged,
                                         onSubmitted: (v) => _save(),
                                         contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
                                       ),
@@ -786,48 +905,54 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                   )
                                 : Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: _contentController.text.split('\n').asMap().entries.map((e) {
-                                      final line = e.value;
-                                      final index = e.key;
-                                      final checkMatch = RegExp(r'^([☐☑]|\[\s?[xXvV]?\s?\])\s+').firstMatch(line);
-                                      if (checkMatch != null) {
-                                        final isChecked = line.startsWith('☑') || checkMatch.group(0)!.contains(RegExp(r'[xv]'));
-                                        return InkWell(
-                                          onTap: () => _toggleCheckboxLine(index),
-                                          child: Container(
-                                            width: double.infinity,
-                                            padding: const EdgeInsets.symmetric(vertical: 2),
-                                            child: Row(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Icon(isChecked ? Icons.check_box : Icons.check_box_outline_blank, size: 22, color: _textColor),
-                                                const SizedBox(width: 8),
-                                                Expanded(child: SelectableLinkify(
-                                                  text: line.substring(checkMatch.end),
-                                                  onOpen: _onLinkOpen,
-                                                  style: TextStyle(fontSize: _fontSizeContent, color: _textColor, decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.2),
-                                                  linkStyle: TextStyle(color: _textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue),
-                                                )),
-                                              ],
+                                      children: _contentController.text.split('\n').asMap().entries.map((e) {
+                                        final line = e.value;
+                                        final index = e.key;
+                                        final checkMatch = RegExp(r'^([☐☑]|\[\s?[xXvV]?\s?\])\s+').firstMatch(line);
+                                        if (checkMatch != null) {
+                                          final isChecked = line.startsWith('☑') || checkMatch.group(0)!.contains(RegExp(r'[xv]'));
+                                          return InkWell(
+                                            onTap: () => _toggleCheckboxLine(index),
+                                            child: Container(
+                                              width: double.infinity,
+                                              padding: const EdgeInsets.symmetric(vertical: 2),
+                                              child: Row(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Icon(isChecked ? Icons.check_box : Icons.check_box_outline_blank, size: 22, color: _textColor),
+                                                  const SizedBox(width: 8),
+                                                  Expanded(child: Text(
+                                                    line.substring(checkMatch.end),
+                                                    style: TextStyle(fontSize: _fontSizeContent, color: _textColor, decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.2),
+                                                  )),
+                                                ],
+                                              ),
                                             ),
-                                          ),
+                                          );
+                                        }
+                                        if (RegExp(r'\.{2,}').hasMatch(line)) {
+                                          return SelectableText(
+                                            line,
+                                            style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.2, fontFamily: 'monospace'),
+                                            contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
+                                          );
+                                        }
+                                        final hasLink = RegExp(r'https?://|www\.').hasMatch(line);
+                                        if (hasLink) {
+                                          return SelectableLinkify(
+                                            text: line,
+                                            onOpen: _onLinkOpen,
+                                            style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.2),
+                                            linkStyle: TextStyle(color: _textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue),
+                                            contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
+                                          );
+                                        }
+                                        return SelectableText(
+                                          line,
+                                          style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.2),
+                                          contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
                                         );
-                                      }
-                                      if (RegExp(r'^(.*?)\s*\.{2,}\s*(\d+(?:[\.,]\d+)?)\s*$').hasMatch(line)) {
-                                        return SelectableLinkify(
-                                          text: line,
-                                          onOpen: _onLinkOpen,
-                                          style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.2, fontFamily: 'monospace'),
-                                          linkStyle: TextStyle(color: _textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue, fontFamily: 'monospace'),
-                                        );
-                                      }
-                                      return SelectableLinkify(
-                                        text: line,
-                                        onOpen: _onLinkOpen,
-                                        style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.2),
-                                        linkStyle: TextStyle(color: _textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue),
-                                      );
-                                    }).toList(),
+                                      }).toList(),
                                   ),
                             ),
                             if (_isEditing && _imagePath != null && _isLocalCopy == 0)
@@ -880,6 +1005,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     );
   }
 
+  // Конструира долната лента с инструменти за избор на цвят, етикети и стилове на списък.
   Widget _buildBottomTools() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
@@ -925,15 +1051,11 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  SizedBox(
-                    width: 20, height: 20,
-                    child: Checkbox(
-                      value: _isTask,
-                      side: BorderSide(color: _secondaryTextColor),
-                      activeColor: _textColor == Colors.black87 ? Colors.black87 : Colors.white,
-                      checkColor: _selectedColor,
-                      onChanged: (val) => setState(() => _isTask = val ?? false),
-                    ),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    icon: Icon(_isTask ? Icons.check_box : Icons.check_box_outline_blank, size: 24, color: _secondaryTextColor),
+                    onPressed: () => setState(() => _isTask = !_isTask),
                   ),
                   const SizedBox(width: 4),
                   Text('Задача', style: TextStyle(color: _secondaryTextColor, fontSize: 12)),
@@ -947,6 +1069,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   }
 }
 
+// Специализиран текстов контролер за подчертаване на математически изрази и линкове в реално време.
 class MathHighlightController extends TextEditingController {
   List<TextRange> highlights = [];
   Color highlightBgColor = Colors.yellow.withValues(alpha: 0.4);
@@ -981,19 +1104,35 @@ class MathHighlightController extends TextEditingController {
     int currentOffset = 0;
     
     List<String> lines = text.split('\n');
-    RegExp priceExp = RegExp(r'^(.*?)\s*\.{2,}\s*(\d+(?:[\.,]\d+)?)\s*$');
+    RegExp dotsExp = RegExp(r'\.{2,}');
+    RegExp checkPat = RegExp(r'^([☐☑]|\[\s?[xXvV]?\s?\])\s+');
     
     for (int i = 0; i < lines.length; i++) {
       String line = lines[i];
       TextStyle? lineStyle = style;
-      if (priceExp.hasMatch(line)) {
-        lineStyle = style?.copyWith(fontFamily: 'monospace');
+      bool isLineChecked = false;
+      if (checkPat.hasMatch(line)) {
+        isLineChecked = line.startsWith('☑') || line.contains(RegExp(r'\[[xXvV]\]'));
+        lineStyle = lineStyle?.copyWith(decoration: isLineChecked ? TextDecoration.lineThrough : null);
+      }
+      if (dotsExp.hasMatch(line)) {
+        lineStyle = lineStyle?.copyWith(fontFamily: 'monospace');
       }
       
       int lineStart = currentOffset;
       int lineEnd = currentOffset + line.length;
       
+      // Highlight URLs in blue
+      RegExp urlExp = RegExp(r'(https?:\/\/[^\s]+|www\.[^\s]+)');
+      Iterable<RegExpMatch> urlMatches = urlExp.allMatches(line);
+      Color linkColor = style?.color == Colors.white ? Colors.lightBlueAccent : Colors.blue;
+      
       List<TextRange> lineHighlights = highlights.where((r) => r.start < lineEnd && r.end > lineStart).toList();
+      // Add URLs as highlights
+      for (var um in urlMatches) {
+        lineHighlights.add(TextRange(start: lineStart + um.start, end: lineStart + um.end));
+      }
+      
       lineHighlights.sort((a, b) => a.start.compareTo(b.start));
       
       if (lineHighlights.isEmpty) {
@@ -1007,7 +1146,14 @@ class MathHighlightController extends TextEditingController {
           if (start > lastEnd) {
             spans.add(TextSpan(text: text.substring(lastEnd, start), style: lineStyle));
           }
-          spans.add(TextSpan(text: text.substring(start, end), style: lineStyle?.copyWith(backgroundColor: highlightBgColor, color: highlightTextColor)));
+          
+          bool isUrl = urlExp.hasMatch(text.substring(start, end));
+          TextStyle? spanStyle = lineStyle?.copyWith(
+            backgroundColor: isUrl ? null : highlightBgColor, 
+            color: isUrl ? linkColor : highlightTextColor
+          );
+          
+          spans.add(TextSpan(text: text.substring(start, end), style: spanStyle));
           lastEnd = end;
         }
         if (lastEnd < lineEnd) {
@@ -1025,6 +1171,7 @@ class MathHighlightController extends TextEditingController {
   }
 }
 
+// Помощен widget за визуализация на снимки с висока резолюция и възможност за мащабиране.
 class FullScreenImage extends StatelessWidget {
   final String imagePath;
   final String title;

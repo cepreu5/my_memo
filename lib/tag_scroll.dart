@@ -77,39 +77,40 @@ class _TagScrollFilterState extends State<TagScrollFilter> {
                 if (index == 0) {
                   return Padding(
                     padding: const EdgeInsets.only(right: 4.0),
-                    child: GestureDetector(
-                      onTap: widget.onOpenFilterMenu,
-                      child: Container(
-                        alignment: Alignment.center,
-                        padding: const EdgeInsets.symmetric(horizontal: 2),
-                        constraints: const BoxConstraints(minWidth: 20, minHeight: 20, maxHeight: 20),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[200],
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: Colors.grey[300]!),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (widget.startDate != null && widget.endDate != null)
-                              Text("${widget.startDate!.day}.${widget.startDate!.month}-${widget.endDate!.day}.${widget.endDate!.month}", style: const TextStyle(fontSize: 10, color: Colors.black))
-                            else if (widget.filterColor == null && !widget.tasksOnly && !widget.reverseOrder)
-                               const Icon(Icons.filter_list, size: 12, color: Colors.black87)
-                            else ...[
-                                if (widget.filterColor != null) ...[
-                                   Container(width: 10, height: 10, decoration: BoxDecoration(color: Color(widget.filterColor!), shape: BoxShape.circle, border: Border.all(color: Colors.black26, width: 0.5))),
-                                   const SizedBox(width: 2),
-                                ],
-                                if (widget.tasksOnly) ...[
-                                   const Icon(Icons.task_alt, size: 12, color: Colors.black87),
-                                   const SizedBox(width: 2),
-                                ],
-                                if (widget.reverseOrder) ...[
-                                   const Icon(Icons.sort, size: 12, color: Colors.black87),
-                                ],
+                    child: Center(
+                      child: GestureDetector( // бутон в менюто с етикети
+                        onTap: widget.onOpenFilterMenu,
+                        child: Container(
+                          alignment: Alignment.center,
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          constraints: const BoxConstraints(minWidth: 24, minHeight: 24, maxHeight: 24),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[200],
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: Colors.grey[300]!),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (widget.startDate != null && widget.endDate != null)
+                                Text("${widget.startDate!.day}.${widget.startDate!.month}-${widget.endDate!.day}.${widget.endDate!.month}", style: const TextStyle(fontSize: 10, color: Colors.black))
+                              else if (widget.filterColor == null && !widget.tasksOnly && !widget.reverseOrder)
+                                 const Icon(Icons.filter_list, size: 12, color: Colors.black87)
+                              else ...[
+                                  if (widget.filterColor != null) ...[
+                                     Container(width: 10, height: 10, decoration: BoxDecoration(color: Color(widget.filterColor!), shape: BoxShape.circle, border: Border.all(color: Colors.black26, width: 0.5))),
+                                     const SizedBox(width: 2),
+                                  ],
+                                  if (widget.tasksOnly) ...[
+                                     const Icon(Icons.checklist, size: 14, color: Colors.black87),
+                                     const SizedBox(width: 2),
+                                  ],
+                                  if (widget.reverseOrder) ...[
+                                     const Icon(Icons.sort, size: 12, color: Colors.black87),
+                                  ],
+                              ],
                             ],
-                            // const Icon(Icons.arrow_drop_down, size: 14, color: Colors.black54),
-                          ],
+                          ),
                         ),
                       ),
                     ),
