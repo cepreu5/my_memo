@@ -1334,14 +1334,7 @@ class _MainListScreenState extends State<MainListScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         ...widgets,
-        if (isGrid) 
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              "CW: ${constraints.maxWidth.toStringAsFixed(1)}, BW: $baseTargetWidth, Gh: ${charWidth.toStringAsFixed(1)}",
-              style: TextStyle(fontSize: 8, color: secondaryTextColor.withValues(alpha: 0.5), fontFamily: 'monospace'),
-            ),
-          ),
+
       ],
     );
       }
