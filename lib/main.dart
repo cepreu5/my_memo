@@ -69,7 +69,6 @@ class _MainListScreenState extends State<MainListScreen> {
   bool _filterTasksOnly = false;
   bool _reverseOrder = false;
   bool _sortById = false;
-  bool _forceTwoDecimals = true;
   int _gridWidthOffset = 10;
   int _maxTitleLength = 70;
   int _appColor = const Color(0xFFFF5E00).toARGB32();
@@ -146,7 +145,6 @@ class _MainListScreenState extends State<MainListScreen> {
       _appColor = prefs.getInt('bg_color') ?? const Color(0xFFFF5E00).toARGB32();
       _reverseOrder = prefs.getBool('reverse_order') ?? false;
       _sortById = prefs.getBool('sort_by_id') ?? false;
-      _forceTwoDecimals = prefs.getBool('force_two_decimals') ?? true;
       _gridWidthOffset = prefs.getInt('grid_width_offset') ?? 10;
       // _alignmentColumn = prefs.getInt('alignment_column') ?? 30;
       final customList = prefs.getStringList('custom_palette') ?? [];
@@ -798,8 +796,11 @@ class _MainListScreenState extends State<MainListScreen> {
         backgroundColor: bgColor.withValues(alpha: 0.9),
         foregroundColor: appBarTextColor,
         leading: Padding(
-          padding: const EdgeInsets.all(10.0),
-          child: Image.asset('assets/app_icon_0.png', fit: BoxFit.contain),
+          padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 2.0),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8.0),
+            child: Image.asset('assets/app_icon_0.png', fit: BoxFit.cover),
+          ),
         ),
         leadingWidth: 52,
         title: Padding(
@@ -1232,7 +1233,7 @@ class _MainListScreenState extends State<MainListScreen> {
         
         final lines = content.split('\n');
         List<Widget> widgets = [];
-        int displayLines = 0;
+        int physicalLinesUsed = 0;
         int maxAllowedLines = isGrid ? _maxLinesGrid : _maxLinesList;
         
         // Calculate dynamic target width based on available pixels and char width
@@ -1245,7 +1246,7 @@ class _MainListScreenState extends State<MainListScreen> {
         int baseTargetWidth = (constraints.maxWidth / charWidth).floor();
 
         for (var line in lines) {
-          if (displayLines >= maxAllowedLines) break;
+          if (physicalLinesUsed >= maxAllowedLines) break;
           
           Match? checkMatch = checkPattern.firstMatch(line);
           bool isChecked = false;
@@ -1263,10 +1264,6 @@ class _MainListScreenState extends State<MainListScreen> {
             if (isGrid) {
               String prefix = m.group(1)!.replaceAll(RegExp(r'\.+$'), '').trimRight();
               String price = m.group(2)!;
-              if (_forceTwoDecimals) {
-                double? val = double.tryParse(price.replaceAll(',', '.'));
-                if (val != null) price = val.toStringAsFixed(2);
-              }
               
               int priceLen = price.length;
               int targetWidth = baseTargetWidth - _gridWidthOffset;
@@ -1295,12 +1292,27 @@ class _MainListScreenState extends State<MainListScreen> {
 
       final hasLink = RegExp(r'https?://|www\.').hasMatch(finalString);
       
+      double availableWidth = constraints.maxWidth - (checkMatch != null ? 22.0 : 0.0);
+      if (availableWidth < 0) availableWidth = 0;
+      
+      final textPainter = TextPainter(
+        text: TextSpan(text: finalString, style: TextStyle(fontSize: _fontSizeContent, fontFamily: 'monospace')),
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: availableWidth);
+      
+      int linesTaken = textPainter.computeLineMetrics().length;
+      if (linesTaken == 0) linesTaken = 1;
+      
+      int remainingLines = maxAllowedLines - physicalLinesUsed;
+      int linesForThisText = isPriceLine ? 1 : (linesTaken < remainingLines ? linesTaken : remainingLines);
+      bool shouldEllipsis = !isPriceLine && linesTaken > remainingLines;
+      
       widgets.add(Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (checkMatch != null)
             Padding(
-              padding: const EdgeInsets.only(right: 4, top: 1),
+              padding: const EdgeInsets.only(right: 4, top: 2),
               child: Icon(isChecked ? Icons.check_box : Icons.check_box_outline_blank, size: 18, color: secondaryTextColor),
             ),
           Expanded(
@@ -1311,23 +1323,23 @@ class _MainListScreenState extends State<MainListScreen> {
                     final url = Uri.parse(link.url);
                     if (await canLaunchUrl(url)) { await launchUrl(url, mode: LaunchMode.externalApplication); }
                   },
-                  maxLines: 1,
-                  overflow: isPriceLine ? TextOverflow.clip : TextOverflow.ellipsis,
+                  maxLines: linesForThisText,
+                  overflow: isPriceLine ? TextOverflow.clip : (shouldEllipsis ? TextOverflow.ellipsis : TextOverflow.visible),
                   style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor, decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.0, fontFamily: 'monospace'),
                   linkStyle: linkStyle,
                 )
               : Text(
                   finalString,
-                  maxLines: 1,
-                  softWrap: false,
-                  overflow: isPriceLine ? TextOverflow.clip : TextOverflow.ellipsis,
+                  maxLines: linesForThisText,
+                  softWrap: !isPriceLine,
+                  overflow: isPriceLine ? TextOverflow.clip : (shouldEllipsis ? TextOverflow.ellipsis : TextOverflow.visible),
                   style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor, decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.0, fontFamily: 'monospace'),
                 ),
           ),
         ],
       ));
       
-      displayLines++;
+      physicalLinesUsed += linesForThisText;
     }
 
     return Column(

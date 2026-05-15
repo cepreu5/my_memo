@@ -96,7 +96,6 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       _fontSizeContent = prefs.getDouble('form_content_size') ?? 16;
       _appColor = prefs.getInt('bg_color') ?? const Color(0xFFFF5E00).toARGB32();
       _alignmentColumn = prefs.getInt('alignment_column') ?? 30;
-      _forceTwoDecimals = prefs.getBool('force_two_decimals') ?? true;
       final customList = prefs.getStringList('custom_palette') ?? [];
       final customColors = customList.map((s) => Color(int.parse(s))).toList();
       for (var c in customColors) { if (!_noteColors.contains(c)) _noteColors.add(c); }
@@ -489,6 +488,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     final String line = text.substring(start, actualEnd);
     final String newText = text.replaceRange(actualEnd, actualEnd, '\n$line');
     _contentController.value = TextEditingValue(text: newText, selection: TextSelection.collapsed(offset: actualEnd + line.length + 1));
+    _contentFocusNode.requestFocus();
   }
   
   // Изтрива изцяло реда, върху който е позициониран курсорът в момента.
@@ -501,6 +501,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     final int actualEnd = end == -1 ? text.length : (end + 1);
     final String newText = text.replaceRange(start, actualEnd, '');
     _contentController.value = TextEditingValue(text: newText, selection: TextSelection.collapsed(offset: start.clamp(0, newText.length)));
+    _contentFocusNode.requestFocus();
   }
   
   // Превръща маркираните редове в булети, номериран списък или списък с отметки.
@@ -694,6 +695,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     if (selection.start == -1) return;
     int lineStart = text.lastIndexOf('\n', selection.start - 1) + 1;
     _contentController.selection = TextSelection.collapsed(offset: lineStart);
+    _contentFocusNode.requestFocus();
   }
   
   // Помощен метод за бързо преместване на курсора в края на реда или добавяне на точки (Tab).
@@ -724,6 +726,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
         selection: TextSelection.collapsed(offset: replaceStart + newTextToInsert.length)
       );
     }
+    _contentFocusNode.requestFocus();
   }
   // Позволява интерактивно маркиране на отметки (☐/☑) директно в режим на преглед.
   void _toggleCheckboxLine(int index) {
@@ -925,24 +928,29 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                 )).toList()),
                               ),
                             const SizedBox(height: 4),
-                            Container(
-                               padding: const EdgeInsets.all(16),
+                            Container( // toolbar
+                               padding: EdgeInsets.fromLTRB(16, _isEditing ? 4 : 16, 16, 16),
                                width: double.infinity,
                                decoration: BoxDecoration(color: _areaColor),
                                child: _isEditing 
                                  ? Column(
                                      crossAxisAlignment: CrossAxisAlignment.start,
                                      children: [
-                                       Row(
-                                         children: [
-                                           IconButton(icon: const Icon(Icons.first_page), onPressed: _moveToLineStart, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Начало на ред'),
-                                           const Spacer(),
-                                           IconButton(icon: const Icon(Icons.keyboard_tab), onPressed: _moveToLineEndOrTab, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Край на ред / Таб'),
-                                           const SizedBox(width: 8),
-                                           IconButton(icon: const Icon(Icons.control_point_duplicate), onPressed: _duplicateCurrentLine, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Дублирай реда'),
-                                           const SizedBox(width: 8),
-                                           IconButton(icon: const Icon(Icons.delete_sweep_outlined), onPressed: _deleteCurrentLine, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Изтрий реда'),
-                                         ],
+                                       Container(
+                                         padding: const EdgeInsets.only(bottom: 4),
+                                         margin: const EdgeInsets.only(bottom: 4),
+                                         decoration: BoxDecoration(border: Border(bottom: BorderSide(color: _textColor.withValues(alpha: 0.1), width: 1.0))),
+                                         child: Row(
+                                           children: [
+                                             IconButton(icon: const Icon(Icons.first_page), onPressed: _moveToLineStart, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Начало на ред'),
+                                             const Spacer(),
+                                             IconButton(icon: const Icon(Icons.keyboard_tab), onPressed: _moveToLineEndOrTab, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Край на ред / Таб'),
+                                             const SizedBox(width: 8),
+                                             IconButton(icon: const Icon(Icons.control_point_duplicate), onPressed: _duplicateCurrentLine, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Дублирай реда'),
+                                             const SizedBox(width: 8),
+                                             IconButton(icon: const Icon(Icons.delete_sweep_outlined), onPressed: _deleteCurrentLine, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Изтрий реда'),
+                                           ],
+                                         ),
                                        ),
                                        TextField(
                                          controller: _contentController, 
@@ -1094,6 +1102,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
               IconButton(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, icon: const Icon(Icons.format_list_bulleted, size: 20), onPressed: () => _toggleList('bullet'), tooltip: 'Списък'),
               IconButton(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, icon: const Icon(Icons.format_list_numbered, size: 20), onPressed: () => _toggleList('number'), tooltip: 'Номериран списък'),
               IconButton(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, icon: const Icon(Icons.checklist, size: 20), onPressed: () => _toggleList('check'), tooltip: 'Пазаруване'),
+              IconButton(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, icon: Text('.00', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: _forceTwoDecimals ? Colors.blue : _secondaryTextColor)), onPressed: () => setState(() => _forceTwoDecimals = !_forceTwoDecimals), tooltip: 'Суми с 2 знака'),
               const Spacer(),
               Row(
                 mainAxisSize: MainAxisSize.min,
