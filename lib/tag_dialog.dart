@@ -16,7 +16,11 @@ class TagDialogHelper {
   }) {
     final TextEditingController tagController = TextEditingController();
     List<String> currentSelected = List.from(initialTags);
-    List<String> pool = List.from(allTags)..sort();
+    List<String> pool = List.from(allTags)..sort((a, b) {
+      if (a == '📌') return -1;
+      if (b == '📌') return 1;
+      return a.compareTo(b);
+    });
 
     showDialog(
       context: context,

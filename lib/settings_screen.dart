@@ -130,8 +130,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       backgroundColor: Color(_appBgColor),
       appBar: AppBar(
+        titleSpacing: 0,
         backgroundColor: Color(_appBgColor),
         foregroundColor: _textColor,
+        leading: Padding(
+          padding: const EdgeInsets.all(10.0),
+          child: Image.asset('assets/app_icon_0.png', fit: BoxFit.contain),
+        ),
+        leadingWidth: 46,
         title: Text('Настройки', style: TextStyle(color: _textColor)),
         automaticallyImplyLeading: false,
         actions: [

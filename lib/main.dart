@@ -83,6 +83,9 @@ class _MainListScreenState extends State<MainListScreen> {
   }
   final TextEditingController _tagController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  String _lastAutoSearch = '';
+  List<String> _savedSearches = [];
   late StreamSubscription _intentDataStreamSubscription;
 
   @override
@@ -118,6 +121,8 @@ class _MainListScreenState extends State<MainListScreen> {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
     setState(() {
+      _lastAutoSearch = prefs.getString('last_auto_search') ?? '';
+      _savedSearches = prefs.getStringList('saved_searches') ?? [];
       _appBackgroundColor = prefs.getInt('bg_color') ?? const Color(0xFFFF5E00).toARGB32();
       _filterMatchAll = prefs.getBool('filter_match_all') ?? false;
       _maxLinesList = prefs.getInt('max_lines_list') ?? 5;
@@ -151,7 +156,33 @@ class _MainListScreenState extends State<MainListScreen> {
   void dispose() {
     _intentDataStreamSubscription.cancel();
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
+  }
+
+  Future<void> _addAutoSearchTerm(String term) async {
+    final trimmed = term.trim();
+    if (trimmed.isEmpty) return;
+    setState(() {
+      _lastAutoSearch = trimmed;
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('last_auto_search', _lastAutoSearch);
+  }
+
+  Future<void> _saveExplicitSearch(String term) async {
+    final trimmed = term.trim();
+    if (trimmed.isEmpty) return;
+    setState(() {
+      _savedSearches.remove(trimmed);
+      _savedSearches.insert(0, trimmed);
+      if (_savedSearches.length > 20) {
+        _savedSearches = _savedSearches.sublist(0, 20);
+      }
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('saved_searches', _savedSearches);
+    _searchController.value = _searchController.value.copyWith();
   }
 
   // Обработва входящи мултимедийни файлове (снимки, видео) при споделяне към приложението.
@@ -246,6 +277,7 @@ class _MainListScreenState extends State<MainListScreen> {
   // Събира и поддържа списък от всички уникални етикети, използвани в наличните бележки.
   void _updateUniqueTags() {
     final Set<String> tagsSet = {};
+    tagsSet.add('📌'); // Кабърчето е системен етикет и винаги трябва да е наличен
     for (var item in _allItems) {
       final String rawTags = (item['tags'] ?? '').toString();
       if (rawTags.isNotEmpty) {
@@ -535,7 +567,11 @@ class _MainListScreenState extends State<MainListScreen> {
           builder: (context, setModalState) {
             final Color contrastColor = _contrast(Color(_appColor), Colors.black, Colors.white);
             final Color secondaryContrast = _contrast(Color(_appColor), Colors.black54, Colors.white70);
-            List<String> allTags = _allExistingTags.toList()..sort();
+            List<String> allTags = _allExistingTags.toList()..sort((a, b) {
+              if (a == '📌') return -1;
+              if (b == '📌') return 1;
+              return a.compareTo(b);
+            });
             return AlertDialog(
               backgroundColor: Color(_appColor),
               title: Text('Етикети за "${item['title'] ?? 'Бележка'}"', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: contrastColor)),
@@ -640,7 +676,11 @@ class _MainListScreenState extends State<MainListScreen> {
           builder: (context, setModalState) {
             final Color contrastColor = _contrast(Color(_appColor), Colors.black, Colors.white);
             final Color secondaryContrast = _contrast(Color(_appColor), Colors.black54, Colors.white70);
-            List<String> allTags = _allExistingTags.toList()..sort();
+            List<String> allTags = _allExistingTags.toList()..sort((a, b) {
+              if (a == '📌') return -1;
+              if (b == '📌') return 1;
+              return a.compareTo(b);
+            });
             return AlertDialog(
               backgroundColor: Color(_appColor),
               title: Text('Филтър по етикети', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: contrastColor)),
@@ -742,21 +782,130 @@ class _MainListScreenState extends State<MainListScreen> {
         titleSpacing: 0,
         backgroundColor: bgColor.withValues(alpha: 0.9),
         foregroundColor: appBarTextColor,
+        leading: Padding(
+          padding: const EdgeInsets.all(10.0),
+          child: Image.asset('assets/app_icon_0.png', fit: BoxFit.contain),
+        ),
+        leadingWidth: 46,
         title: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8.0),
-          child: TextField(
-            controller: _searchController,
-            onChanged: (val) => _filterItems(val),
-            style: TextStyle(color: appBarTextColor),
-            decoration: InputDecoration(
-              hintText: 'Търсене...',
-              hintStyle: TextStyle(color: appBarTextColor.withValues(alpha: 0.6)),
-              prefixIcon: Icon(Icons.search, color: appBarTextColor.withValues(alpha: 0.6)),
-              suffixIcon: _searchController.text.isNotEmpty ? IconButton(icon: Icon(Icons.clear, size: 20, color: appBarTextColor), onPressed: () { _searchController.clear(); _filterItems(''); FocusScope.of(context).unfocus(); }) : null,
-              filled: true,
-              fillColor: (isDarkBg ? Colors.white : Colors.black).withValues(alpha: 0.1),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
-              contentPadding: const EdgeInsets.symmetric(vertical: 0),
+          child: LayoutBuilder(
+            builder: (context, constraints) => RawAutocomplete<String>(
+              focusNode: _searchFocusNode,
+              textEditingController: _searchController,
+              optionsBuilder: (TextEditingValue textEditingValue) {
+                List<String> combined = [];
+                if (_lastAutoSearch.isNotEmpty) combined.add(_lastAutoSearch);
+                for (var s in _savedSearches) {
+                  if (s != _lastAutoSearch) combined.add(s);
+                }
+                if (textEditingValue.text.isEmpty) {
+                  return combined;
+                }
+                return combined.where((String option) {
+                  return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
+                });
+              },
+              onSelected: (String selection) {
+                _searchController.text = selection;
+                _filterItems(selection);
+                _addAutoSearchTerm(selection);
+                FocusScope.of(context).unfocus();
+              },
+              fieldViewBuilder: (BuildContext context, TextEditingController textEditingController, FocusNode focusNode, VoidCallback onFieldSubmitted) {
+                return TextField(
+                  controller: textEditingController,
+                  focusNode: focusNode,
+                  onChanged: (val) => _filterItems(val),
+                  onSubmitted: (val) {
+                    _filterItems(val);
+                    _addAutoSearchTerm(val);
+                    onFieldSubmitted();
+                  },
+                  style: TextStyle(color: appBarTextColor),
+                  decoration: InputDecoration(
+                    hintText: 'Търсене...',
+                    hintStyle: TextStyle(color: appBarTextColor.withValues(alpha: 0.6)),
+                    prefixIcon: Icon(Icons.search, color: appBarTextColor.withValues(alpha: 0.6)),
+                    suffixIcon: textEditingController.text.isNotEmpty ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: Icon(Icons.save_outlined, size: 20, color: appBarTextColor),
+                          padding: EdgeInsets.zero,
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () => _saveExplicitSearch(textEditingController.text),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.clear, size: 20, color: appBarTextColor), 
+                          padding: EdgeInsets.zero,
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () { textEditingController.clear(); _filterItems(''); focusNode.unfocus(); }
+                        ),
+                      ],
+                    ) : null,
+                    filled: true,
+                    fillColor: (isDarkBg ? Colors.white : Colors.black).withValues(alpha: 0.1),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                  ),
+                );
+              },
+              optionsViewBuilder: (BuildContext context, AutocompleteOnSelected<String> onSelected, Iterable<String> options) {
+                return Align(
+                  alignment: Alignment.topLeft,
+                  child: Material(
+                    elevation: 4.0,
+                    color: bgColor,
+                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(8)),
+                    child: Container(
+                      constraints: const BoxConstraints(maxHeight: 250),
+                      width: constraints.maxWidth,
+                      child: ListView.builder(
+                        padding: EdgeInsets.zero,
+                        shrinkWrap: true,
+                        itemCount: options.length,
+                        itemBuilder: (BuildContext context, int index) {
+                          final String option = options.elementAt(index);
+                          final bool isAuto = option == _lastAutoSearch;
+                          return InkWell(
+                            onTap: () {
+                              onSelected(option);
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                              child: Row(
+                                children: [
+                                  Icon(isAuto ? Icons.history : Icons.save_outlined, size: 18, color: appBarTextColor.withValues(alpha: 0.6)),
+                                  const SizedBox(width: 8),
+                                  Expanded(child: Text(option, style: TextStyle(color: appBarTextColor, fontStyle: isAuto ? FontStyle.italic : FontStyle.normal), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                  IconButton(
+                                    icon: Icon(Icons.close, size: 16, color: appBarTextColor.withValues(alpha: 0.5)),
+                                    padding: EdgeInsets.zero,
+                                    visualDensity: VisualDensity.compact,
+                                    onPressed: () async {
+                                      setState(() {
+                                        if (isAuto) {
+                                          _lastAutoSearch = '';
+                                          SharedPreferences.getInstance().then((p) => p.setString('last_auto_search', ''));
+                                        } else {
+                                          _savedSearches.remove(option);
+                                          SharedPreferences.getInstance().then((p) => p.setStringList('saved_searches', _savedSearches));
+                                        }
+                                      });
+                                      _searchController.value = _searchController.value.copyWith();
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ),
@@ -909,20 +1058,20 @@ class _MainListScreenState extends State<MainListScreen> {
             Row( // заглавие и чекбокс
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (item['isCompleted'] != 0) ...[ // отметки
-                  GestureDetector(
-                    onTap: () => _toggleComplete(item),
-                      child: Icon(isDone ? Icons.check_box : Icons.check_box_outline_blank, size: 22, color: textColor),
-                  ),
-                ],
                 if (isPinned)
                   GestureDetector(
                     onTap: () => _unpinNote(item),
                     child: Padding(
                       padding: const EdgeInsets.only(right: 4.0),
-                      child: Text('📌', style: TextStyle(fontSize: _fontSizeTitle + 2)),
+                      child: Text('📌', style: TextStyle(fontSize: _fontSizeTitle - 2)), // @@ кабърче
                     ),
                   ),
+                if (item['isCompleted'] != 0) ...[ // отметки
+                  GestureDetector(
+                    onTap: () => _toggleComplete(item),
+                    child: Icon(isDone ? Icons.check_box : Icons.check_box_outline_blank, size: 22, color: textColor),
+                  ),
+                ],
                 if ((item['title'] ?? '').toString().trim().isNotEmpty)
                   Expanded(child: Text(item['title'], maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.bold, fontSize: _fontSizeTitle, color: textColor, decoration: isDone ? TextDecoration.lineThrough : null))),
               ],

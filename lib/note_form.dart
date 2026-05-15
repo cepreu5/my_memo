@@ -166,7 +166,11 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            final allAvailableTags = { ...widget.existingTags, ..._newTagsInSession }.toList()..sort();
+            final allAvailableTags = { ...widget.existingTags, ..._newTagsInSession }.toList()..sort((a, b) {
+              if (a == '📌') return -1;
+              if (b == '📌') return 1;
+              return a.compareTo(b);
+            });
             final Color contrastColor = _contrast(Color(_appColor), Colors.black, Colors.white);
             final Color secondaryContrast = _contrast(Color(_appColor), Colors.black54, Colors.white70);
             return AlertDialog(
@@ -187,7 +191,8 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                           return FilterChip(
                             visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            padding: EdgeInsets.zero,
+                            // padding: EdgeInsets.zero,
+                            padding: const EdgeInsets.only(right: 4.0),
                             labelPadding: const EdgeInsets.symmetric(horizontal: 4.0),
                             label: Text(tag, style: const TextStyle(fontSize: 10, color: Colors.black)),
                             selected: isSelected,
@@ -909,12 +914,12 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                               Padding(
                                 padding: const EdgeInsets.symmetric(vertical: 4.0),
                                 child: Wrap(spacing: 6, runSpacing: 0, children: _selectedTags.map((tag) => Chip(
-                                  label: Text(tag, style: TextStyle(fontSize: 12, color: _textColor)),
-                                  backgroundColor: _textColor.withValues(alpha: 0.1),
-                                  side: BorderSide(color: _textColor.withValues(alpha: 0.2)),
+                                  label: Text(tag, style: const TextStyle(fontSize: 12, color: Colors.black)),
+                                  backgroundColor: Colors.grey,
+                                  side: const BorderSide(color: Colors.black),
                                   padding: EdgeInsets.zero, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                   onDeleted: _isEditing ? () => setState(() => _selectedTags.remove(tag)) : null,
-                                  deleteIconColor: _textColor,
+                                  deleteIconColor:  Colors.black,
                                 )).toList()),
                               ),
                             const SizedBox(height: 4),
@@ -1033,13 +1038,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
             ),
             FlyMenu(actions: [
               if (widget.item?['id'] != null) FlyAction(icon: Icons.delete, onTap: _deleteNote, label: "Изтрий"),
-              FlyAction(icon: Icons.arrow_back, onTap: () {
-                if (_isEditing && widget.item?['id'] != null) {
-                  setState(() => _isEditing = false);
-                } else {
-                  Navigator.maybePop(context);
-                }
-              }, label: "Назад"),
+              FlyAction(icon: Icons.arrow_back, onTap: () => Navigator.maybePop(context), label: "Назад"),
               if (_isEditing) FlyAction(icon: Icons.save, onTap: _save, label: "Запази"),
               if (!_isEditing) FlyAction(icon: Icons.calculate_outlined, onTap: _calculateNote, label: "Калкулатор"),
               if (!_isEditing) FlyAction(icon: Icons.edit, onTap: () => setState(() => _isEditing = true), label: "Редактирай"),
