@@ -54,6 +54,7 @@ class _MainListScreenState extends State<MainListScreen> {
   bool _isGridView = true;
   int _appBackgroundColor = const Color(0xFFFF5E00).toARGB32();
   bool _filterMatchAll = false;
+  bool _confirmDelete = false;
   bool _compactGridView = false;
   bool _showDate = false;
   int _listColumns = 1;

@@ -20,7 +20,8 @@ class FlyMenu extends StatefulWidget {
 class _FlyMenuState extends State<FlyMenu> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   bool _isOpen = false;
-  Offset _buttonPosition = const Offset(300, 400);
+  double _fractX = 0.85;
+  double _fractY = 0.85;
   OverlayEntry? _overlayEntry;
 
   @override
@@ -32,7 +33,8 @@ class _FlyMenuState extends State<FlyMenu> with SingleTickerProviderStateMixin {
 
   Future<void> _loadAndShow() async {
     final prefs = await SharedPreferences.getInstance();
-    _buttonPosition = Offset(prefs.getDouble('buttonX') ?? 300, prefs.getDouble('buttonY') ?? 400);
+    _fractX = prefs.getDouble('buttonFractX') ?? 0.85;
+    _fractY = prefs.getDouble('buttonFractY') ?? 0.85;
     WidgetsBinding.instance.addPostFrameCallback((_) => _showOverlay());
   }
 
@@ -47,21 +49,25 @@ class _FlyMenuState extends State<FlyMenu> with SingleTickerProviderStateMixin {
     Overlay.of(context).insert(_overlayEntry!);
   }
 
-  Future<void> _savePosition(Offset pos) async {
+  Future<void> _savePosition(double fx, double fy) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble('buttonX', pos.dx);
-    await prefs.setDouble('buttonY', pos.dy);
+    await prefs.setDouble('buttonFractX', fx);
+    await prefs.setDouble('buttonFractY', fy);
   }
 
   void _onPanUpdate(DragUpdateDetails details) {
     final size = MediaQuery.of(context).size;
+    double currentX = _fractX * size.width;
+    double currentY = _fractY * size.height;
+    
+    double newX = (currentX + details.delta.dx).clamp(30.0, size.width - 30.0);
+    double newY = (currentY + details.delta.dy).clamp(30.0, size.height - 30.0);
+    
     setState(() {
-      _buttonPosition = Offset(
-        (_buttonPosition.dx + details.delta.dx).clamp(30.0, size.width - 30.0),
-        (_buttonPosition.dy + details.delta.dy).clamp(30.0, size.height - 30.0),
-      );
+      _fractX = newX / size.width;
+      _fractY = newY / size.height;
     });
-    _savePosition(_buttonPosition);
+    _savePosition(_fractX, _fractY);
     _overlayEntry?.markNeedsBuild();
   }
 
@@ -90,8 +96,8 @@ class _FlyMenuState extends State<FlyMenu> with SingleTickerProviderStateMixin {
 
   Widget _buildMenu(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    double safeX = _buttonPosition.dx.clamp(30.0, size.width - 30.0);
-    double safeY = _buttonPosition.dy.clamp(30.0, size.height - 30.0);
+    double safeX = (_fractX * size.width).clamp(30.0, size.width - 30.0);
+    double safeY = (_fractY * size.height).clamp(30.0, size.height - 30.0);
     bool isLeft = safeX < size.width / 2;
     return Stack(
       children: [
