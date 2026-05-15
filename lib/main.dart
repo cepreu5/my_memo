@@ -68,9 +68,10 @@ class _MainListScreenState extends State<MainListScreen> {
   bool _reverseOrder = false;
   bool _sortById = false;
   bool _forceTwoDecimals = true;
+  int _gridWidthOffset = 10;
   int _maxTitleLength = 70;
   int _appColor = const Color(0xFFFF5E00).toARGB32();
-  int _alignmentColumn = 30;
+  // int _alignmentColumn = 30;
   List<Color> _noteColors = [
     Colors.white, const Color(0xFF0A1931), const Color(0xFFFF5E00), 
     const Color(0xFFFFC93C), const Color(0xFF6A2C70), const Color(0xFFB83B5E), 
@@ -132,7 +133,8 @@ class _MainListScreenState extends State<MainListScreen> {
       _reverseOrder = prefs.getBool('reverse_order') ?? false;
       _sortById = prefs.getBool('sort_by_id') ?? false;
       _forceTwoDecimals = prefs.getBool('force_two_decimals') ?? true;
-      _alignmentColumn = prefs.getInt('alignment_column') ?? 30;
+      _gridWidthOffset = prefs.getInt('grid_width_offset') ?? 10;
+      // _alignmentColumn = prefs.getInt('alignment_column') ?? 30;
       final customList = prefs.getStringList('custom_palette') ?? [];
       _noteColors = [
         Colors.white, const Color(0xFF0A1931), const Color(0xFFFF5E00), 
@@ -285,7 +287,13 @@ class _MainListScreenState extends State<MainListScreen> {
         bool matchesTasks = !_filterTasksOnly || (item['isCompleted'] == 1 || item['isCompleted'] == 2);
         return matchesSearch && matchesTags && matchesDate && matchesColor && matchesTasks;
       }).toList();
+
       _filteredItems.sort((a, b) {
+        final aPinned = (a['tags'] ?? '').toString().contains('📌');
+        final bPinned = (b['tags'] ?? '').toString().contains('📌');
+        if (aPinned && !bPinned) return -1;
+        if (!aPinned && bPinned) return 1;
+
         if (_sortById) {
           final valA = (a['id'] ?? 0);
           final valB = (b['id'] ?? 0);
@@ -434,7 +442,7 @@ class _MainListScreenState extends State<MainListScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 4.0),
                         child: Row(
                           children: [
-                            const Icon(Icons.format_list_numbered, color: Colors.transparent), // Placeholder or alternative icon
+                            Icon(Icons.format_list_numbered, color: contrastColor),
                             const SizedBox(width: 10),
                             Expanded(child: Text("Последователен ред", style: TextStyle(color: contrastColor))),
                             IconButton(
@@ -765,7 +773,7 @@ class _MainListScreenState extends State<MainListScreen> {
             Column(
               children: [
                 TagScrollFilter(
-                  allTags: _allExistingTags.toList(),
+                  allTags: _allExistingTags.where((t) => t != '📌').toList(),
                   selectedTags: _selectedFilterTags,
                   textColor: appBarTextColor,
                   startDate: _startDate,
@@ -875,9 +883,18 @@ class _MainListScreenState extends State<MainListScreen> {
     );
   }
 
+  // Премахва "📌" етикета от бележката, като по този начин я "откача".
+  Future<void> _unpinNote(Map<String, dynamic> item) async {
+    List<String> tags = (item['tags'] ?? '').toString().split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    tags.remove('📌');
+    await dbHelper.updateItem({ ...item, 'tags': tags.join(', ') });
+    _refreshItems();
+  }
+
   // Създава визуалната карта на всяка бележка, включваща заглавие, съдържание, изображения и жестове за изтриване.
   Widget _buildNoteCard(Map<String, dynamic> item, bool isGrid) {
     final bool isDone = item['isCompleted'] == 1;
+    final bool isPinned = (item['tags'] ?? '').toString().contains('📌');
     final Color cardColor = item['color'] != null ? Color(item['color']) : Colors.white;
     final Color textColor = cardColor.computeLuminance() > 0.5 ? Colors.black87 : Colors.white;
     final Color secondaryTextColor = cardColor.computeLuminance() > 0.5 ? Colors.black54 : Colors.white70;
@@ -888,7 +905,7 @@ class _MainListScreenState extends State<MainListScreen> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if ((item['title'] ?? '').toString().trim().isNotEmpty || item['isCompleted'] != 0)
+          if ((item['title'] ?? '').toString().trim().isNotEmpty || item['isCompleted'] != 0 || isPinned)
             Row( // заглавие и чекбокс
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -898,6 +915,14 @@ class _MainListScreenState extends State<MainListScreen> {
                       child: Icon(isDone ? Icons.check_box : Icons.check_box_outline_blank, size: 22, color: textColor),
                   ),
                 ],
+                if (isPinned)
+                  GestureDetector(
+                    onTap: () => _unpinNote(item),
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 4.0),
+                      child: Text('📌', style: TextStyle(fontSize: _fontSizeTitle + 2)),
+                    ),
+                  ),
                 if ((item['title'] ?? '').toString().trim().isNotEmpty)
                   Expanded(child: Text(item['title'], maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.bold, fontSize: _fontSizeTitle, color: textColor, decoration: isDone ? TextDecoration.lineThrough : null))),
               ],
@@ -999,59 +1024,70 @@ class _MainListScreenState extends State<MainListScreen> {
 
   // Специализиран метод за изобразяване на съдържанието, поддържащ линкове, чекбоксове и подравнени ценови списъци.
   Widget _buildContentWithLinks(String content, Color secondaryTextColor, Color textColor, bool isGrid) {
-    final linkStyle = TextStyle(color: textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue, decoration: TextDecoration.none);
-    // Regex for price lines: (prefix) (dots or spaces) (number)
-    final priceExp = RegExp(r'^(.*?)(?:\s*\.{2,}\s*|\s{2,})(\d+(?:[\.,]\d+)?)\s*$');
-    final checkPattern = RegExp(r'^([☐☑]|\[\s?[xXvV]?\s?\])\s+');
-    
-    final lines = content.split('\n');
-    List<Widget> widgets = [];
-    int displayLines = 0;
-    int maxAllowedLines = isGrid ? _maxLinesGrid : _maxLinesList;
-    
-    // Grid fits about 18-20 chars on most screens. Let's use 18 to be safe.
-    int targetWidth = isGrid ? 18 : _alignmentColumn;
-
-    for (var line in lines) {
-      if (displayLines >= maxAllowedLines) break;
-      
-      Match? checkMatch = checkPattern.firstMatch(line);
-      bool isChecked = false;
-      String cleanLine = line;
-      if (checkMatch != null) {
-        isChecked = line.startsWith('☑') || checkMatch.group(1)!.contains(RegExp(r'[xXvV]'));
-        cleanLine = line.substring(checkMatch.end);
-      }
-
-      String finalString = cleanLine;
-      Match? m = priceExp.firstMatch(cleanLine);
-      bool isPriceLine = m != null;
-      
-      if (m != null) {
-        String prefix = m.group(1)!.replaceAll(RegExp(r'\.+$'), '').trimRight();
-        String price = m.group(2)!;
-        if (_forceTwoDecimals) {
-          double? val = double.tryParse(price.replaceAll(',', '.'));
-          if (val != null) price = val.toStringAsFixed(2);
-        }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final linkStyle = TextStyle(color: textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue, decoration: TextDecoration.none);
+        final priceExp = RegExp(r'^(.*?)(?:\s*\.{2,}\s*|\s{2,})(\d+(?:[\.,]\d+)?)\s*$');
+        final checkPattern = RegExp(r'^([☐☑]|\[\s?[xXvV]?\s?\])\s+');
         
-        int priceLen = price.length;
-        int availableForPrefix = targetWidth - priceLen - 1; // 1 space before price
-
-        String filler;
-        String truncatedPrefix;
+        final lines = content.split('\n');
+        List<Widget> widgets = [];
+        int displayLines = 0;
+        int maxAllowedLines = isGrid ? _maxLinesGrid : _maxLinesList;
         
-        if (prefix.length + 2 <= availableForPrefix) {
-          // If there's room for at least 2 dots, use them
-          truncatedPrefix = prefix;
-          filler = "." * (availableForPrefix - prefix.length);
-        } else {
-          // No room for dots, just truncate prefix and use a single space
-          truncatedPrefix = prefix.length > availableForPrefix ? prefix.substring(0, availableForPrefix) : prefix;
-          filler = ""; // No dots if truncated
-        }
-        finalString = filler.isEmpty ? "$truncatedPrefix $price" : "$truncatedPrefix$filler $price";
-      }
+        // Calculate dynamic target width based on available pixels and char width
+        final tp = TextPainter(
+          text: TextSpan(text: '0', style: TextStyle(fontSize: _fontSizeContent, fontFamily: 'monospace')),
+          maxLines: 1,
+          textDirection: TextDirection.ltr,
+        )..layout();
+        double charWidth = tp.width;
+        int baseTargetWidth = (constraints.maxWidth / charWidth).floor();
+
+        for (var line in lines) {
+          if (displayLines >= maxAllowedLines) break;
+          
+          Match? checkMatch = checkPattern.firstMatch(line);
+          bool isChecked = false;
+          String cleanLine = line;
+          if (checkMatch != null) {
+            isChecked = line.startsWith('☑') || checkMatch.group(1)!.contains(RegExp(r'[xXvV]'));
+            cleanLine = line.substring(checkMatch.end);
+          }
+
+          String finalString = cleanLine;
+          Match? m = priceExp.firstMatch(cleanLine);
+          bool isPriceLine = m != null;
+          
+          if (isPriceLine) {
+            if (isGrid) {
+              String prefix = m.group(1)!.replaceAll(RegExp(r'\.+$'), '').trimRight();
+              String price = m.group(2)!;
+              if (_forceTwoDecimals) {
+                double? val = double.tryParse(price.replaceAll(',', '.'));
+                if (val != null) price = val.toStringAsFixed(2);
+              }
+              
+              int priceLen = price.length;
+              int targetWidth = baseTargetWidth - _gridWidthOffset;
+              int availableForPrefix = targetWidth - priceLen - 1; // 1 space before price
+
+              String filler;
+              String truncatedPrefix;
+              
+              if (prefix.length + 2 <= availableForPrefix) {
+                truncatedPrefix = prefix;
+                filler = "." * (availableForPrefix - prefix.length);
+              } else {
+                truncatedPrefix = prefix.length > availableForPrefix ? prefix.substring(0, availableForPrefix) : prefix;
+                filler = ""; 
+              }
+              finalString = filler.isEmpty ? "$truncatedPrefix $price" : "$truncatedPrefix$filler $price";
+            } else {
+              // LIST VIEW: No processing, just use raw line and monospace
+              finalString = cleanLine;
+            }
+          }
 
       final hasLink = RegExp(r'https?://|www\.').hasMatch(finalString);
       
@@ -1091,7 +1127,19 @@ class _MainListScreenState extends State<MainListScreen> {
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: widgets,
+      children: [
+        ...widgets,
+        if (isGrid) 
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              "CW: ${constraints.maxWidth.toStringAsFixed(1)}, BW: $baseTargetWidth, Gh: ${charWidth.toStringAsFixed(1)}",
+              style: TextStyle(fontSize: 8, color: secondaryTextColor.withValues(alpha: 0.5), fontFamily: 'monospace'),
+            ),
+          ),
+      ],
+    );
+      }
     );
   }
 

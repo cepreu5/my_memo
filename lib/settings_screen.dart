@@ -28,6 +28,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _maxTitleLength = 70;
   int _alignmentColumn = 30;
   bool _forceTwoDecimals = true;
+  int _gridWidthOffset = 10;
   final TextEditingController _listLinesController = TextEditingController();
   final TextEditingController _gridLinesController = TextEditingController();
   final TextEditingController _listTitleSizeController = TextEditingController();
@@ -36,6 +37,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _formContentSizeController = TextEditingController();
   final TextEditingController _maxTitleLengthController = TextEditingController();
   final TextEditingController _alignmentColumnController = TextEditingController();
+  final TextEditingController _gridWidthOffsetController = TextEditingController();
   final List<Color> _availableColors = [
     Colors.white, const Color(0xFF0A1931), const Color(0xFFFF5E00), 
     const Color(0xFFFFC93C), const Color(0xFF6A2C70), const Color(0xFFB83B5E), 
@@ -58,6 +60,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _listTitleSizeController.dispose(); _listContentSizeController.dispose();
     _formTitleSizeController.dispose(); _formContentSizeController.dispose();
     _maxTitleLengthController.dispose(); _alignmentColumnController.dispose();
+    _gridWidthOffsetController.dispose();
     super.dispose();
   }
 
@@ -79,6 +82,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _maxTitleLength = prefs.getInt('max_title_length') ?? 70;
       _alignmentColumn = prefs.getInt('alignment_column') ?? 30;
       _forceTwoDecimals = prefs.getBool('force_two_decimals') ?? true;
+      _gridWidthOffset = prefs.getInt('grid_width_offset') ?? 10;
       final customList = prefs.getStringList('custom_palette') ?? [];
       _customPalette = customList.map((s) => Color(int.parse(s))).toList();
       if (updateControllers) {
@@ -90,6 +94,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _formContentSizeController.text = _fontSizeFormContent.toInt().toString();
         _maxTitleLengthController.text = _maxTitleLength.toString();
         _alignmentColumnController.text = _alignmentColumn.toString();
+        _gridWidthOffsetController.text = _gridWidthOffset.toString();
       }
       if (!_availableColors.contains(Color(_appBgColor))) _availableColors.add(Color(_appBgColor));
       if (!_availableColors.contains(Color(_defaultNoteColor))) _availableColors.add(Color(_defaultNoteColor));
@@ -113,6 +118,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.setInt('max_title_length', _maxTitleLength);
     await prefs.setInt('alignment_column', _alignmentColumn);
     await prefs.setBool('force_two_decimals', _forceTwoDecimals);
+    await prefs.setInt('grid_width_offset', _gridWidthOffset);
     await prefs.setStringList('custom_palette', _customPalette.map((c) => c.toARGB32().toString()).toList());
     if (mounted) Navigator.pop(context);
   }
@@ -152,6 +158,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _buildNumberInput(title: 'Брой редове текст', controller: _gridLinesController, min: 1, max: 20, onChanged: (val) => setState(() => _maxLinesGrid = val)),
               _buildSwitchInput(title: 'Компактен вид', value: _compactGridView, onChanged: (val) => setState(() => _compactGridView = val)),
               _buildSwitchInput(title: 'Суми с 2 знака', value: _forceTwoDecimals, onChanged: (val) => setState(() => _forceTwoDecimals = val)),
+              _buildNumberInput(title: 'Таб стоп', controller: _gridWidthOffsetController, min: 0, max: 50, onChanged: (val) => setState(() => _gridWidthOffset = val)),
               const SizedBox(height: 10),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
               _buildSectionTitle('Бележки на основния екран'),

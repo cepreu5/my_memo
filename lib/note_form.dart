@@ -928,13 +928,13 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                      children: [
                                        Row(
                                          children: [
-                                           IconButton(icon: const Icon(Icons.keyboard_arrow_left), onPressed: _moveToLineStart, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Начало на ред'),
+                                           IconButton(icon: const Icon(Icons.first_page), onPressed: _moveToLineStart, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Начало на ред'),
                                            const Spacer(),
-                                           IconButton(icon: const Icon(Icons.keyboard_arrow_right), onPressed: _moveToLineEndOrTab, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Край на ред / Таб'),
+                                           IconButton(icon: const Icon(Icons.keyboard_tab), onPressed: _moveToLineEndOrTab, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Край на ред / Таб'),
                                            const SizedBox(width: 8),
-                                           IconButton(icon: const Icon(Icons.keyboard_arrow_down), onPressed: _duplicateCurrentLine, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Дублирай реда'),
+                                           IconButton(icon: const Icon(Icons.control_point_duplicate), onPressed: _duplicateCurrentLine, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Дублирай реда'),
                                            const SizedBox(width: 8),
-                                           IconButton(icon: const Icon(Icons.close), onPressed: _deleteCurrentLine, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Изтрий реда'),
+                                           IconButton(icon: const Icon(Icons.delete_sweep_outlined), onPressed: _deleteCurrentLine, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Изтрий реда'),
                                          ],
                                        ),
                                        TextField(
