@@ -19,6 +19,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _confirmDelete = true;
   bool _compactGridView = false;
   bool _showDate = false;
+  int _listColumns = 1;
+  int _gridColumns = 2;
   int _maxLinesList = 5;
   int _maxLinesGrid = 5;
   double _fontSizeListTitle = 14;
@@ -31,6 +33,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _gridWidthOffset = 10;
   final TextEditingController _listLinesController = TextEditingController();
   final TextEditingController _gridLinesController = TextEditingController();
+  final TextEditingController _listColumnsController = TextEditingController();
+  final TextEditingController _gridColumnsController = TextEditingController();
   final TextEditingController _listTitleSizeController = TextEditingController();
   final TextEditingController _listContentSizeController = TextEditingController();
   final TextEditingController _formTitleSizeController = TextEditingController();
@@ -57,6 +61,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void dispose() {
     _listLinesController.dispose(); _gridLinesController.dispose();
+    _listColumnsController.dispose(); _gridColumnsController.dispose();
     _listTitleSizeController.dispose(); _listContentSizeController.dispose();
     _formTitleSizeController.dispose(); _formContentSizeController.dispose();
     _maxTitleLengthController.dispose(); _alignmentColumnController.dispose();
@@ -73,6 +78,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _confirmDelete = prefs.getBool('confirm_delete') ?? true;
       _compactGridView = prefs.getBool('compact_grid_view') ?? false;
       _showDate = prefs.getBool('show_date') ?? false;
+      _listColumns = prefs.getInt('list_columns') ?? 1;
+      _gridColumns = prefs.getInt('grid_columns') ?? 2;
       _maxLinesList = prefs.getInt('max_lines_list') ?? 5;
       _maxLinesGrid = prefs.getInt('max_lines_grid') ?? 5;
       _fontSizeListTitle = prefs.getDouble('list_title_size') ?? 14;
@@ -88,6 +95,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (updateControllers) {
         _listLinesController.text = _maxLinesList.toString();
         _gridLinesController.text = _maxLinesGrid.toString();
+        _listColumnsController.text = _listColumns.toString();
+        _gridColumnsController.text = _gridColumns.toString();
         _listTitleSizeController.text = _fontSizeListTitle.toInt().toString();
         _listContentSizeController.text = _fontSizeListContent.toInt().toString();
         _formTitleSizeController.text = _fontSizeFormTitle.toInt().toString();
@@ -109,6 +118,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.setBool('confirm_delete', _confirmDelete);
     await prefs.setBool('compact_grid_view', _compactGridView);
     await prefs.setBool('show_date', _showDate);
+    await prefs.setInt('list_columns', _listColumns);
+    await prefs.setInt('grid_columns', _gridColumns);
     await prefs.setInt('max_lines_list', _maxLinesList);
     await prefs.setInt('max_lines_grid', _maxLinesGrid);
     await prefs.setDouble('list_title_size', _fontSizeListTitle);
@@ -159,8 +170,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _buildColorPicker(selectedColor: _defaultNoteColor, onColorSelected: (color) => setState(() => _defaultNoteColor = color.toARGB32())),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
               _buildSectionTitle('Списък'),
+              _buildNumberInput(title: 'Брой колони', controller: _listColumnsController, min: 1, max: 10, onChanged: (val) => setState(() => _listColumns = val)),
               _buildNumberInput(title: 'Брой редове текст', controller: _listLinesController, min: 1, max: 20, onChanged: (val) => setState(() => _maxLinesList = val)),
               _buildSectionTitle('Матрица'),
+              _buildNumberInput(title: 'Брой колони', controller: _gridColumnsController, min: 1, max: 10, onChanged: (val) => setState(() => _gridColumns = val)),
               _buildNumberInput(title: 'Брой редове текст', controller: _gridLinesController, min: 1, max: 20, onChanged: (val) => setState(() => _maxLinesGrid = val)),
               _buildSwitchInput(title: 'Компактен вид', value: _compactGridView, onChanged: (val) => setState(() => _compactGridView = val)),
               _buildSwitchInput(title: 'Суми с 2 знака', value: _forceTwoDecimals, onChanged: (val) => setState(() => _forceTwoDecimals = val)),

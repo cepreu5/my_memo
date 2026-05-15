@@ -54,13 +54,14 @@ class _MainListScreenState extends State<MainListScreen> {
   bool _isGridView = true;
   int _appBackgroundColor = const Color(0xFFFF5E00).toARGB32();
   bool _filterMatchAll = false;
-  bool _confirmDelete = false;
   bool _compactGridView = false;
+  bool _showDate = false;
+  int _listColumns = 1;
+  int _gridColumns = 2;
   int _maxLinesList = 5;
   int _maxLinesGrid = 5;
   double _fontSizeTitle = 14;
   double _fontSizeContent = 13;
-  bool _showDate = false;
   DateTime? _startDate;
   DateTime? _endDate;
   int? _filterColor;
@@ -84,13 +85,18 @@ class _MainListScreenState extends State<MainListScreen> {
   final TextEditingController _tagController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
+  final ScrollController _mainScrollController = ScrollController();
   String _lastAutoSearch = '';
   List<String> _savedSearches = [];
+  bool _isSearchSavedTemporarily = false;
   late StreamSubscription _intentDataStreamSubscription;
 
   @override
   void initState() {
     super.initState();
+    _searchFocusNode.addListener(() {
+      if (mounted) setState(() {});
+    });
     _initializeApp();
   }
 
@@ -125,6 +131,8 @@ class _MainListScreenState extends State<MainListScreen> {
       _savedSearches = prefs.getStringList('saved_searches') ?? [];
       _appBackgroundColor = prefs.getInt('bg_color') ?? const Color(0xFFFF5E00).toARGB32();
       _filterMatchAll = prefs.getBool('filter_match_all') ?? false;
+      _listColumns = prefs.getInt('list_columns') ?? 1;
+      _gridColumns = prefs.getInt('grid_columns') ?? 2;
       _maxLinesList = prefs.getInt('max_lines_list') ?? 5;
       _maxLinesGrid = prefs.getInt('max_lines_grid') ?? 5;
       _fontSizeTitle = prefs.getDouble('list_title_size') ?? 14;
@@ -157,6 +165,7 @@ class _MainListScreenState extends State<MainListScreen> {
     _intentDataStreamSubscription.cancel();
     _searchController.dispose();
     _searchFocusNode.dispose();
+    _mainScrollController.dispose();
     super.dispose();
   }
 
@@ -179,10 +188,15 @@ class _MainListScreenState extends State<MainListScreen> {
       if (_savedSearches.length > 20) {
         _savedSearches = _savedSearches.sublist(0, 20);
       }
+      _isSearchSavedTemporarily = true;
     });
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList('saved_searches', _savedSearches);
     _searchController.value = _searchController.value.copyWith();
+    
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _isSearchSavedTemporarily = false);
+    });
   }
 
   // Обработва входящи мултимедийни файлове (снимки, видео) при споделяне към приложението.
@@ -786,7 +800,7 @@ class _MainListScreenState extends State<MainListScreen> {
           padding: const EdgeInsets.all(10.0),
           child: Image.asset('assets/app_icon_0.png', fit: BoxFit.contain),
         ),
-        leadingWidth: 46,
+        leadingWidth: 52,
         title: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8.0),
           child: LayoutBuilder(
@@ -826,24 +840,37 @@ class _MainListScreenState extends State<MainListScreen> {
                   decoration: InputDecoration(
                     hintText: 'Търсене...',
                     hintStyle: TextStyle(color: appBarTextColor.withValues(alpha: 0.6)),
-                    prefixIcon: Icon(Icons.search, color: appBarTextColor.withValues(alpha: 0.6)),
-                    suffixIcon: textEditingController.text.isNotEmpty ? Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: Icon(Icons.save_outlined, size: 20, color: appBarTextColor),
-                          padding: EdgeInsets.zero,
-                          visualDensity: VisualDensity.compact,
+                    prefixIcon: textEditingController.text.isNotEmpty 
+                      ? IconButton(
+                          icon: Icon(_isSearchSavedTemporarily ? Icons.check : Icons.save_outlined, size: 20, color: _isSearchSavedTemporarily ? Colors.green : appBarTextColor.withValues(alpha: 0.8)),
                           onPressed: () => _saveExplicitSearch(textEditingController.text),
-                        ),
-                        IconButton(
-                          icon: Icon(Icons.clear, size: 20, color: appBarTextColor), 
-                          padding: EdgeInsets.zero,
-                          visualDensity: VisualDensity.compact,
-                          onPressed: () { textEditingController.clear(); _filterItems(''); focusNode.unfocus(); }
-                        ),
-                      ],
-                    ) : null,
+                        )
+                      : Icon(Icons.search, color: appBarTextColor.withValues(alpha: 0.6)),
+                    suffixIcon: (textEditingController.text.isNotEmpty || focusNode.hasFocus)
+                      ? Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (textEditingController.text.isNotEmpty)
+                              IconButton(
+                                icon: Icon(Icons.clear, size: 20, color: appBarTextColor), 
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                visualDensity: VisualDensity.compact,
+                                onPressed: () { textEditingController.clear(); _filterItems(''); focusNode.unfocus(); }
+                              ),
+                            if (focusNode.hasFocus)
+                              IconButton(
+                                icon: Icon(Icons.keyboard_arrow_up, size: 20, color: appBarTextColor.withValues(alpha: 0.6)), 
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                visualDensity: VisualDensity.compact,
+                                onPressed: () => focusNode.unfocus(),
+                              ),
+                            if (textEditingController.text.isNotEmpty || focusNode.hasFocus)
+                              const SizedBox(width: 4),
+                          ],
+                        ) 
+                      : null,
                     filled: true,
                     fillColor: (isDarkBg ? Colors.white : Colors.black).withValues(alpha: 0.1),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
@@ -861,46 +888,51 @@ class _MainListScreenState extends State<MainListScreen> {
                     child: Container(
                       constraints: const BoxConstraints(maxHeight: 250),
                       width: constraints.maxWidth,
-                      child: ListView.builder(
-                        padding: EdgeInsets.zero,
-                        shrinkWrap: true,
-                        itemCount: options.length,
-                        itemBuilder: (BuildContext context, int index) {
-                          final String option = options.elementAt(index);
-                          final bool isAuto = option == _lastAutoSearch;
-                          return InkWell(
-                            onTap: () {
-                              onSelected(option);
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                              child: Row(
-                                children: [
-                                  Icon(isAuto ? Icons.history : Icons.save_outlined, size: 18, color: appBarTextColor.withValues(alpha: 0.6)),
-                                  const SizedBox(width: 8),
-                                  Expanded(child: Text(option, style: TextStyle(color: appBarTextColor, fontStyle: isAuto ? FontStyle.italic : FontStyle.normal), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                                  IconButton(
-                                    icon: Icon(Icons.close, size: 16, color: appBarTextColor.withValues(alpha: 0.5)),
-                                    padding: EdgeInsets.zero,
-                                    visualDensity: VisualDensity.compact,
-                                    onPressed: () async {
-                                      setState(() {
-                                        if (isAuto) {
-                                          _lastAutoSearch = '';
-                                          SharedPreferences.getInstance().then((p) => p.setString('last_auto_search', ''));
-                                        } else {
-                                          _savedSearches.remove(option);
-                                          SharedPreferences.getInstance().then((p) => p.setStringList('saved_searches', _savedSearches));
-                                        }
-                                      });
-                                      _searchController.value = _searchController.value.copyWith();
-                                    },
+                      child: StatefulBuilder(
+                        builder: (BuildContext context, StateSetter setOverlayState) {
+                          final currentOptions = options.where((o) => o == _lastAutoSearch || _savedSearches.contains(o)).toList();
+                          return ListView.builder(
+                            padding: EdgeInsets.zero,
+                            shrinkWrap: true,
+                            itemCount: currentOptions.length,
+                            itemBuilder: (BuildContext context, int index) {
+                              final String option = currentOptions[index];
+                              final bool isAuto = option == _lastAutoSearch;
+                              return InkWell(
+                                onTap: () {
+                                  onSelected(option);
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                                  child: Row(
+                                    children: [
+                                      Icon(isAuto ? Icons.history : Icons.save_outlined, size: 18, color: appBarTextColor.withValues(alpha: 0.6)),
+                                      const SizedBox(width: 8),
+                                      Expanded(child: Text(option, style: TextStyle(color: appBarTextColor, fontStyle: isAuto ? FontStyle.italic : FontStyle.normal), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                      IconButton(
+                                        icon: Icon(Icons.close, size: 16, color: appBarTextColor.withValues(alpha: 0.5)),
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                        visualDensity: VisualDensity.compact,
+                                        onPressed: () async {
+                                          if (isAuto) {
+                                            _lastAutoSearch = '';
+                                            SharedPreferences.getInstance().then((p) => p.setString('last_auto_search', ''));
+                                          } else {
+                                            _savedSearches.remove(option);
+                                            SharedPreferences.getInstance().then((p) => p.setStringList('saved_searches', _savedSearches));
+                                          }
+                                          setState(() {}); // Update main state
+                                          setOverlayState(() {}); // Update overlay state immediately
+                                        },
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
-                            ),
+                                ),
+                              );
+                            },
                           );
-                        },
+                        }
                       ),
                     ),
                   ),
@@ -962,6 +994,11 @@ class _MainListScreenState extends State<MainListScreen> {
             ),
             FlyMenu(
               actions: [
+                FlyAction(icon: Icons.arrow_upward, onTap: () {
+                  if (_mainScrollController.hasClients) {
+                    _mainScrollController.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+                  }
+                }, label: "Нагоре"),
                 FlyAction(icon: _isGridView ? Icons.view_list : Icons.grid_view, onTap: _toggleView, label: "Изглед"),
                 if (_searchController.text.isNotEmpty)
                   FlyAction(
@@ -1003,33 +1040,46 @@ class _MainListScreenState extends State<MainListScreen> {
     );
   }
 
+  // Помощен метод за генериране на многоколонен изглед
+  Widget _buildMultiColumn(int numColumns, bool isGrid) {
+    if (numColumns == 1) {
+      return ListView.builder(
+        controller: _mainScrollController,
+        padding: const EdgeInsets.all(8),
+        itemCount: _filteredItems.length,
+        itemBuilder: (context, index) => _buildNoteCard(_filteredItems[index], isGrid),
+      );
+    }
+    
+    List<List<Map<String, dynamic>>> columns = List.generate(numColumns, (_) => []);
+    for (int i = 0; i < _filteredItems.length; i++) {
+      columns[i % numColumns].add(_filteredItems[i]);
+    }
+    return SingleChildScrollView(
+      controller: _mainScrollController,
+      padding: const EdgeInsets.all(8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: List.generate(numColumns, (index) {
+          return Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(left: index == 0 ? 0 : 8.0),
+              child: Column(children: columns[index].map((item) => _buildNoteCard(item, isGrid)).toList()),
+            )
+          );
+        }),
+      ),
+    );
+  }
+
   // Конструира вертикален списък от бележки за стандартния изглед.
   Widget _buildList() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(8),
-      itemCount: _filteredItems.length,
-      itemBuilder: (context, index) => _buildNoteCard(_filteredItems[index], false),
-    );
+    return _buildMultiColumn(_listColumns, false);
   }
 
   // Изгражда двуколонен "шахматен" изглед за бележките в режим матрица.
   Widget _buildGrid() {
-    List<Map<String, dynamic>> leftColumn = [];
-    List<Map<String, dynamic>> rightColumn = [];
-    for (int i = 0; i < _filteredItems.length; i++) {
-      if (i % 2 == 0) { leftColumn.add(_filteredItems[i]); } else { rightColumn.add(_filteredItems[i]); }
-    }
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(child: Column(children: leftColumn.map((item) => _buildNoteCard(item, true)).toList())),
-          const SizedBox(width: 8),
-          Expanded(child: Column(children: rightColumn.map((item) => _buildNoteCard(item, true)).toList())),
-        ],
-      ),
-    );
+    return _buildMultiColumn(_gridColumns, true);
   }
 
   // Премахва "📌" етикета от бележката, като по този начин я "откача".
@@ -1220,6 +1270,7 @@ class _MainListScreenState extends State<MainListScreen> {
               int priceLen = price.length;
               int targetWidth = baseTargetWidth - _gridWidthOffset;
               int availableForPrefix = targetWidth - priceLen - 1; // 1 space before price
+              if (availableForPrefix < 0) availableForPrefix = 0;
 
               String filler;
               String truncatedPrefix;
@@ -1227,6 +1278,9 @@ class _MainListScreenState extends State<MainListScreen> {
               if (prefix.length + 2 <= availableForPrefix) {
                 truncatedPrefix = prefix;
                 filler = "." * (availableForPrefix - prefix.length);
+              } else if (prefix.length < availableForPrefix) {
+                truncatedPrefix = prefix;
+                filler = " ";
               } else {
                 truncatedPrefix = prefix.length > availableForPrefix ? prefix.substring(0, availableForPrefix) : prefix;
                 filler = ""; 
@@ -1264,6 +1318,7 @@ class _MainListScreenState extends State<MainListScreen> {
               : Text(
                   finalString,
                   maxLines: 1,
+                  softWrap: false,
                   overflow: isPriceLine ? TextOverflow.clip : TextOverflow.ellipsis,
                   style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor, decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.0, fontFamily: 'monospace'),
                 ),
