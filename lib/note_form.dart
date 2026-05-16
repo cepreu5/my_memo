@@ -10,6 +10,8 @@ import 'package:flutter_linkify/flutter_linkify.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'color_picker_helper.dart';
 
 // StatefulWidget, който дефинира екрана за създаване, редактиране и преглед на детайлите на бележка.
@@ -746,6 +748,12 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     return match?.group(1);
   }
   
+  String? _extractTiktokUrl(String text) {
+    final regExp = RegExp(r'(https?:\/\/(?:www\.|vm\.|vt\.)?tiktok\.com\/[^\s]+)', caseSensitive: false);
+    final match = regExp.firstMatch(text);
+    return match?.group(1);
+  }
+  
   // Премахва бележката от базата данни и изтрива свързаните с нея файлове след потвърждение.
   Future<void> _deleteNote() async {
     if (widget.item?['id'] == null) return;
@@ -780,7 +788,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   // Отваря прикаченото изображение или YouTube видео в пълен размер.
   void _openFullScreenImage() async {
     if (_imagePath == null) return;
-    if (_extractYoutubeId(_contentController.text) != null) {
+    if (_extractYoutubeId(_contentController.text) != null || _extractTiktokUrl(_contentController.text) != null) {
       final url = Uri.parse(_contentController.text.trim());
       if (await canLaunchUrl(url)) { await launchUrl(url, mode: LaunchMode.externalApplication); return; }
     }
@@ -867,7 +875,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                           children: [
                             if (_imagePath != null)
                               GestureDetector(
-                                onTap: (_isEditing && _extractYoutubeId(_contentController.text) == null) ? _editExistingImage : _openFullScreenImage,
+                                onTap: (_isEditing && _extractYoutubeId(_contentController.text) == null && _extractTiktokUrl(_contentController.text) == null) ? _editExistingImage : _openFullScreenImage,
                                 child: Stack(
                                   children: [
                                     Container(
@@ -1013,7 +1021,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                          if (hasLink) {
                                            return SelectableLinkify(
                                              text: line,
-                                             onOpen: _onLinkOpen, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                             onOpen: _onLinkOpen, maxLines: 1,
                                              style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.0, fontFamily: line.contains('..') ? 'monospace' : null),
                                              linkStyle: TextStyle(color: _textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue),
                                              contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
@@ -1251,5 +1259,7 @@ class FullScreenImage extends StatelessWidget {
     );
   }
 }
+
+
 
 

@@ -13,6 +13,7 @@ import 'tag_scroll.dart';
 import 'package:flutter_linkify/flutter_linkify.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'fly_menu.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 
@@ -102,14 +103,19 @@ class _MainListScreenState extends State<MainListScreen> {
 
   // Инициализира системните компоненти, зарежда настройките и слуша за споделено съдържание от други приложения.
   Future<void> _initializeApp() async {
+    // 1. Абонираме се за стрийм-а ВЕДНАГА, за да не изпуснем събитие, докато се изпълняват другите await-ове
+    _intentDataStreamSubscription = ReceiveSharingIntent.instance.getMediaStream().listen((value) {
+      if (value.isNotEmpty) _handleSharedMedia(value);
+    }, onError: (err) => debugPrint("Грешка при споделяне: $err"));
+
     try {
       await CrossPlatformVideoThumbnails.initialize();
       await _loadSettings();
       await _refreshItems();
-      _intentDataStreamSubscription = ReceiveSharingIntent.instance.getMediaStream().listen((value) {
-        if (value.isNotEmpty) _handleSharedMedia(value);
-      }, onError: (err) => debugPrint("Грешка при споделяне: $err"));
+      
       WidgetsBinding.instance.addPostFrameCallback((_) async {
+        // 2. Малко изчакване за началното споделяне, за да е сигурно, че Navigator-ът е готов
+        await Future.delayed(const Duration(milliseconds: 500));
         final initialMedia = await ReceiveSharingIntent.instance.getInitialMedia();
         if (initialMedia.isNotEmpty) {
           await _handleSharedMedia(initialMedia);
@@ -216,10 +222,17 @@ class _MainListScreenState extends State<MainListScreen> {
     return match?.group(1);
   }
 
+  String? _extractTiktokUrl(String text) {
+    final regExp = RegExp(r'(https?:\/\/(?:www\.|vm\.|vt\.)?tiktok\.com\/[^\s]+)', caseSensitive: false);
+    final match = regExp.firstMatch(text);
+    return match?.group(1);
+  }
+
   // Анализира споделен текст за линкове или YouTube ID и подготвя създаването на нова бележка.
   Future<void> _handleSharedText(String text) async {
     if (text.isEmpty) return;
     String? youtubeId = _extractYoutubeId(text);
+    String? tiktokUrl = _extractTiktokUrl(text);
     String? thumbPath;
     String title = '📝 ';
     if (youtubeId != null) {
@@ -232,6 +245,24 @@ class _MainListScreenState extends State<MainListScreen> {
           await File(thumbPath).writeAsBytes(response.bodyBytes);
         }
       } catch (e) { debugPrint("Грешка при YouTube thumbnail: $e"); }
+    } else if (tiktokUrl != null) {
+      title = '🎬 ';
+      try {
+        final oembedResp = await http.get(Uri.parse('https://www.tiktok.com/oembed?url=$tiktokUrl'));
+        if (oembedResp.statusCode == 200) {
+          final data = jsonDecode(oembedResp.body);
+          final thumbUrl = data['thumbnail_url'];
+          if (thumbUrl != null) {
+            final thumbResp = await http.get(Uri.parse(thumbUrl));
+            if (thumbResp.statusCode == 200) {
+              final appDir = await getApplicationDocumentsDirectory();
+              final fileName = 'tiktok_thumb_${DateTime.now().millisecondsSinceEpoch}.jpg';
+              thumbPath = p.join(appDir.path, fileName);
+              await File(thumbPath).writeAsBytes(thumbResp.bodyBytes);
+            }
+          }
+        }
+      } catch (e) { debugPrint("Грешка при TikTok thumbnail: $e"); }
     } else if (text.contains('http://') || text.contains('https://') || text.contains('www.')) {
       title = '🔗 ';
     }
@@ -1092,6 +1123,22 @@ class _MainListScreenState extends State<MainListScreen> {
     _refreshItems();
   }
 
+  void _openVideoLink(String content) async {
+    String? youtubeId = _extractYoutubeId(content);
+    String? tiktokUrl = _extractTiktokUrl(content);
+    String? videoUrl;
+    if (youtubeId != null) {
+      final match = RegExp(r'(https?:\/\/(?:www\.)?(?:youtube\.com|youtu\.be)\/[^\s]+)', caseSensitive: false).firstMatch(content);
+      videoUrl = match?.group(0);
+    } else if (tiktokUrl != null) {
+      videoUrl = tiktokUrl;
+    }
+    if (videoUrl != null) {
+      final url = Uri.parse(videoUrl.trim());
+      if (await canLaunchUrl(url)) { await launchUrl(url, mode: LaunchMode.externalApplication); }
+    }
+  }
+
   // Създава визуалната карта на всяка бележка, включваща заглавие, съдържание, изображения и жестове за изтриване.
   Widget _buildNoteCard(Map<String, dynamic> item, bool isGrid) {
     final bool isDone = item['isCompleted'] == 1;
@@ -1151,9 +1198,18 @@ class _MainListScreenState extends State<MainListScreen> {
       cardContent = Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 100, alignment: Alignment.topCenter, margin: const EdgeInsets.fromLTRB(10, 10, 0, 10),
-            child: ClipRRect(borderRadius: BorderRadius.circular(8), child: ConstrainedBox(constraints: const BoxConstraints(maxHeight: 100, maxWidth: 100), child: Image.file(File(displayImagePath), fit: BoxFit.cover, errorBuilder: (c, e, s) => const Icon(Icons.broken_image, color: Colors.grey)))),
+          GestureDetector(
+            onTap: () {
+              if (_extractYoutubeId(item['content'] ?? '') != null || _extractTiktokUrl(item['content'] ?? '') != null) {
+                _openVideoLink(item['content'] ?? '');
+              } else {
+                _openNoteForm(initialData: item, index: _filteredItems.indexOf(item));
+              }
+            },
+            child: Container(
+              width: 100, alignment: Alignment.topCenter, margin: const EdgeInsets.fromLTRB(10, 10, 0, 10),
+              child: ClipRRect(borderRadius: BorderRadius.circular(8), child: ConstrainedBox(constraints: const BoxConstraints(maxHeight: 100, maxWidth: 100), child: Image.file(File(displayImagePath), fit: BoxFit.cover, errorBuilder: (c, e, s) => const Icon(Icons.broken_image, color: Colors.grey)))),
+            ),
           ),
           Expanded(child: cardContent),
         ],
@@ -1162,7 +1218,16 @@ class _MainListScreenState extends State<MainListScreen> {
       cardContent = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(borderRadius: const BorderRadius.vertical(top: Radius.circular(8)), child: NoteGridImage(imagePath: displayImagePath, backgroundColor: cardColor, compactView: _compactGridView)),
+          GestureDetector(
+            onTap: () {
+              if (_extractYoutubeId(item['content'] ?? '') != null || _extractTiktokUrl(item['content'] ?? '') != null) {
+                _openVideoLink(item['content'] ?? '');
+              } else {
+                _openNoteForm(initialData: item, index: _filteredItems.indexOf(item));
+              }
+            },
+            child: ClipRRect(borderRadius: const BorderRadius.vertical(top: Radius.circular(8)), child: NoteGridImage(imagePath: displayImagePath, backgroundColor: cardColor, compactView: _compactGridView)),
+          ),
           cardContent,
         ],
       );
