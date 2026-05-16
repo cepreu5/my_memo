@@ -16,10 +16,16 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'fly_menu.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 // Входна точка на приложението, която инициализира Flutter средата и зарежда стартовия екран.
-void main() {
+void main() async {
   final binding = WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Firebase.initializeApp();
+  } catch (e) {
+    debugPrint("Грешка Firebase: $e");
+  }
   FlutterNativeSplash.preserve(widgetsBinding: binding);
   runApp(const BusinessOrganizerApp());
 }

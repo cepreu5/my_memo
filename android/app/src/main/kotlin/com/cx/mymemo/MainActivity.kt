@@ -1,4 +1,4 @@
-package com.example.my_scr
+package com.cx.mymemo
 
 import io.flutter.embedding.android.FlutterActivity
 
