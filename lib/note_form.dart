@@ -944,6 +944,17 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                            children: [
                                              IconButton(icon: const Icon(Icons.first_page), onPressed: _moveToLineStart, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Начало на ред'),
                                              const Spacer(),
+                                             GestureDetector(
+                                               onTap: () => setState(() => _forceTwoDecimals = !_forceTwoDecimals),
+                                               child: Tooltip(message: 'Суми с 2 знака', child: Row(
+                                                 mainAxisSize: MainAxisSize.min,
+                                                 children: [
+                                                   Icon(_forceTwoDecimals ? Icons.check : Icons.close, size: 12, color: _secondaryTextColor),
+                                                   Text('.00', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'monospace', color: _secondaryTextColor)),
+                                                 ],
+                                               )),
+                                             ),
+                                             const SizedBox(width: 8),
                                              IconButton(icon: const Icon(Icons.keyboard_tab), onPressed: _moveToLineEndOrTab, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Край на ред / Таб'),
                                              const SizedBox(width: 8),
                                              IconButton(icon: const Icon(Icons.control_point_duplicate), onPressed: _duplicateCurrentLine, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Дублирай реда'),
@@ -1002,7 +1013,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                          if (hasLink) {
                                            return SelectableLinkify(
                                              text: line,
-                                             onOpen: _onLinkOpen,
+                                             onOpen: _onLinkOpen, maxLines: 1, overflow: TextOverflow.ellipsis,
                                              style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.0, fontFamily: line.contains('..') ? 'monospace' : null),
                                              linkStyle: TextStyle(color: _textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue),
                                              contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
@@ -1102,7 +1113,6 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
               IconButton(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, icon: const Icon(Icons.format_list_bulleted, size: 20), onPressed: () => _toggleList('bullet'), tooltip: 'Списък'),
               IconButton(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, icon: const Icon(Icons.format_list_numbered, size: 20), onPressed: () => _toggleList('number'), tooltip: 'Номериран списък'),
               IconButton(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, icon: const Icon(Icons.checklist, size: 20), onPressed: () => _toggleList('check'), tooltip: 'Пазаруване'),
-              IconButton(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, icon: Text('.00', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: _forceTwoDecimals ? Colors.blue : _secondaryTextColor)), onPressed: () => setState(() => _forceTwoDecimals = !_forceTwoDecimals), tooltip: 'Суми с 2 знака'),
               const Spacer(),
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -1241,3 +1251,5 @@ class FullScreenImage extends StatelessWidget {
     );
   }
 }
+
+

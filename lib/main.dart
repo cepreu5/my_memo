@@ -1304,8 +1304,8 @@ class _MainListScreenState extends State<MainListScreen> {
       if (linesTaken == 0) linesTaken = 1;
       
       int remainingLines = maxAllowedLines - physicalLinesUsed;
-      int linesForThisText = isPriceLine ? 1 : (linesTaken < remainingLines ? linesTaken : remainingLines);
-      bool shouldEllipsis = !isPriceLine && linesTaken > remainingLines;
+      int linesForThisText = (isPriceLine || hasLink) ? 1 : (linesTaken < remainingLines ? linesTaken : remainingLines);
+      bool shouldEllipsis = (!isPriceLine && !hasLink && linesTaken > remainingLines) || (hasLink && linesTaken > 1);
       
       widgets.add(Row(
         crossAxisAlignment: CrossAxisAlignment.start,
