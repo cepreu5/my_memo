@@ -41,9 +41,9 @@ dependencies:
   path: ^1.9.0
 
   # Firebase и Облачна синхронизация
-  firebase_core: ^2.27.0
-  cloud_firestore: ^4.15.5
-  firebase_auth: ^4.17.8
+  firebase_core: any
+  cloud_firestore: any
+  firebase_auth: any
   google_sign_in: ^6.2.1
 
   # 2. Достъп до системни папки и файлове
@@ -57,6 +57,9 @@ dependencies:
 
   # 5. Преглед на снимки с Zoom функционалност
   photo_view: ^0.15.0
+
+  # 6. Създаване и четене на архиви (за Google Drive)
+  archive: ^4.0.9
   cross_platform_video_thumbnails: ^0.1.0
 
   # 6. Локални известия и напомняния

@@ -17,6 +17,7 @@ import 'dart:convert';
 import 'fly_menu.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'sync_helper.dart';
 
 // Входна точка на приложението, която инициализира Flutter средата и зарежда стартовия екран.
 void main() async {
@@ -76,6 +77,7 @@ class _MainListScreenState extends State<MainListScreen> {
   bool _filterTasksOnly = false;
   bool _reverseOrder = false;
   bool _sortById = false;
+  bool _filterByUpdatedAt = true;
   int _gridWidthOffset = 10;
   int _maxTitleLength = 70;
   int _appColor = const Color(0xFFFF5E00).toARGB32();
@@ -118,9 +120,12 @@ class _MainListScreenState extends State<MainListScreen> {
       await CrossPlatformVideoThumbnails.initialize();
       await _loadSettings();
       await _refreshItems();
-      
+      if (SyncHelper().currentUser != null) {
+        SyncHelper().syncNotes().then((_) {
+          if (mounted) _refreshItems();
+        });
+      }
       WidgetsBinding.instance.addPostFrameCallback((_) async {
-        // 2. Малко изчакване за началното споделяне, за да е сигурно, че Navigator-ът е готов
         await Future.delayed(const Duration(milliseconds: 500));
         final initialMedia = await ReceiveSharingIntent.instance.getInitialMedia();
         if (initialMedia.isNotEmpty) {
@@ -157,6 +162,7 @@ class _MainListScreenState extends State<MainListScreen> {
       _appColor = prefs.getInt('bg_color') ?? const Color(0xFFFF5E00).toARGB32();
       _reverseOrder = prefs.getBool('reverse_order') ?? false;
       _sortById = prefs.getBool('sort_by_id') ?? false;
+      _filterByUpdatedAt = prefs.getBool('filter_by_updated_at') ?? true;
       _gridWidthOffset = prefs.getInt('grid_width_offset') ?? 10;
       // _alignmentColumn = prefs.getInt('alignment_column') ?? 30;
       final customList = prefs.getStringList('custom_palette') ?? [];
@@ -357,8 +363,9 @@ class _MainListScreenState extends State<MainListScreen> {
         }
         bool matchesDate = true;
         if (_startDate != null && _endDate != null) {
-          if (item['reminderTime'] != null) {
-            final dt = DateTime.parse(item['reminderTime']);
+          final dateKey = _filterByUpdatedAt ? 'updatedAt' : 'creationTime';
+          if (item[dateKey] != null) {
+            final dt = DateTime.parse(item[dateKey]);
             final checkDt = DateTime(dt.year, dt.month, dt.day);
             final start = DateTime(_startDate!.year, _startDate!.month, _startDate!.day);
             final end = DateTime(_endDate!.year, _endDate!.month, _endDate!.day);
@@ -381,8 +388,8 @@ class _MainListScreenState extends State<MainListScreen> {
           final valB = (b['id'] ?? 0);
           return _reverseOrder ? valB.compareTo(valA) : valA.compareTo(valB);
         } else {
-          final valA = (a['reminderTime'] ?? '').toString();
-          final valB = (b['reminderTime'] ?? '').toString();
+          final valA = (a['updatedAt'] ?? '').toString();
+          final valB = (b['updatedAt'] ?? '').toString();
           return _reverseOrder ? valA.compareTo(valB) : valB.compareTo(valA);
         }
       });
@@ -458,6 +465,37 @@ class _MainListScreenState extends State<MainListScreen> {
                         ),
                       ),
                     ),
+                    if (_startDate != null)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 34, bottom: 8),
+                        child: Row(
+                          children: [
+                            Text("По дата на:", style: TextStyle(color: contrastColor, fontSize: 13)),
+                            const SizedBox(width: 8),
+                            DropdownButton<bool>(
+                              value: _filterByUpdatedAt,
+                              dropdownColor: Color(_appColor),
+                              icon: Icon(Icons.arrow_drop_down, color: contrastColor),
+                              underline: Container(height: 1, color: contrastColor.withValues(alpha: 0.5)),
+                              style: TextStyle(color: contrastColor, fontSize: 13),
+                              items: const [
+                                DropdownMenuItem(value: true, child: Text("Промяна")),
+                                DropdownMenuItem(value: false, child: Text("Създаване")),
+                              ],
+                              onChanged: (val) async {
+                                if (val != null) {
+                                  final prefs = await SharedPreferences.getInstance();
+                                  await prefs.setBool('filter_by_updated_at', val);
+                                  if (!mounted) return;
+                                  setState(() { _filterByUpdatedAt = val; });
+                                  _filterItems(_searchController.text);
+                                  setModalState(() {});
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
                     Row(children: [Icon(Icons.palette, color: contrastColor), const SizedBox(width: 10), Text("Цвят", style: TextStyle(color: contrastColor))]),
                     const SizedBox(height: 10),
                     Padding(
@@ -1267,6 +1305,9 @@ class _MainListScreenState extends State<MainListScreen> {
             if (!isUsed) { try { final f = File(item['imagePath']); if (await f.exists()) await f.delete(); } catch (e) { debugPrint("Грешка файл: $e"); } }
           }
           await dbHelper.deleteItem(item['id']);
+          if (item['uuid'] != null) {
+            SyncHelper().deleteNoteRemote(item['uuid'].toString());
+          }
           _refreshItems();
         },
         child: Container(

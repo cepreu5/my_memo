@@ -12,7 +12,20 @@
           "package_name": "com.cx.mymemo"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "715473708979-eagie002flup4571mt0f60vbniocecva.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.cx.mymemo",
+            "certificate_hash": "25f236ec62c66c8c6379feac81ee5a90fb808ff6"
+          }
+        },
+        {
+          "client_id": "715473708979-66abefrikkhfhastpl1g1f3ngvhpr3nr.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyA9Bz0Girfz8_74mSbZiWjISO8Bf5BH7iQ"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "715473708979-66abefrikkhfhastpl1g1f3ngvhpr3nr.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

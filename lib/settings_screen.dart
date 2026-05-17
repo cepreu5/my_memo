@@ -5,6 +5,8 @@ import 'color_picker_helper.dart';
 import 'db_viewer.dart';
 import 'fly_menu.dart';
 import 'local_files_viewer.dart';
+import 'sync_helper.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -30,6 +32,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _maxTitleLength = 70;
   int _alignmentColumn = 30;
   int _gridWidthOffset = 10;
+  User? _user;
+  bool _isSyncing = false;
   final TextEditingController _listLinesController = TextEditingController();
   final TextEditingController _gridLinesController = TextEditingController();
   final TextEditingController _listColumnsController = TextEditingController();
@@ -55,6 +59,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _loadSettings();
+    _user = SyncHelper().currentUser;
+    SyncHelper().authStateChanges.listen((user) {
+      if (mounted) setState(() => _user = user);
+    });
   }
 
   @override
@@ -202,6 +210,102 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
               _buildSectionTitle('Споделяне'),
               _buildNumberInput(title: 'Дължина на заглавие', controller: _maxTitleLengthController, min: 10, max: 500, onChanged: (val) => setState(() => _maxTitleLength = val)),
+              Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
+              _buildSectionTitle('Облачна синхронизация'),
+              if (_user == null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.login),
+                    label: const Text('Вход с Google & Синхронизация'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black87,
+                      minimumSize: const Size(double.infinity, 45),
+                    ),
+                    onPressed: () async {
+                      setState(() => _isSyncing = true);
+                      final user = await SyncHelper().signInWithGoogle();
+                      if (user != null && mounted) {
+                        await SyncHelper().syncNotes();
+                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Успешен вход и синхронизация!')));
+                      }
+                      if (mounted) setState(() => _isSyncing = false);
+                    },
+                  ),
+                )
+              else
+                Column(
+                  children: [
+                    ListTile(
+                      leading: _user!.photoURL != null ? CircleAvatar(backgroundImage: NetworkImage(_user!.photoURL!)) : const CircleAvatar(child: Icon(Icons.person)),
+                      title: Text(_user!.displayName ?? 'Потребител', style: TextStyle(color: _textColor)),
+                      subtitle: Text(_user!.email ?? '', style: TextStyle(color: _secondaryTextColor)),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.logout, color: Colors.red),
+                        onPressed: () async {
+                          setState(() => _isSyncing = true);
+                          await SyncHelper().signOut();
+                          if (mounted) setState(() => _isSyncing = false);
+                        },
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      child: ElevatedButton.icon(
+                        icon: _isSyncing ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.sync),
+                        label: const Text('Синхронизирай сега'),
+                        style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 40)),
+                        onPressed: _isSyncing ? null : () async {
+                          setState(() => _isSyncing = true);
+                          final error = await SyncHelper().syncNotes();
+                          if (mounted) {
+                            setState(() => _isSyncing = false);
+                            if (context.mounted) {
+                              if (error == null) {
+                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Синхронизацията приключи!')));
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Грешка: $error'), backgroundColor: Colors.red));
+                              }
+                            }
+                          }
+                        },
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      child: ElevatedButton.icon(
+                        icon: _isSyncing ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.cloud_upload),
+                        label: const Text('Бекъп на снимките в Google Drive'),
+                        style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 40)),
+                        onPressed: _isSyncing ? null : () async {
+                          setState(() => _isSyncing = true);
+                          final msg = await SyncHelper().backupImagesToGoogleDrive();
+                          if (mounted) {
+                            setState(() => _isSyncing = false);
+                            if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg ?? 'Готово')));
+                          }
+                        },
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      child: ElevatedButton.icon(
+                        icon: _isSyncing ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.cloud_download),
+                        label: const Text('Възстановяване на снимките от Drive'),
+                        style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 40)),
+                        onPressed: _isSyncing ? null : () async {
+                          setState(() => _isSyncing = true);
+                          final msg = await SyncHelper().restoreImagesFromGoogleDrive();
+                          if (mounted) {
+                            setState(() => _isSyncing = false);
+                            if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg ?? 'Готово')));
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
               ListTile(leading: Icon(Icons.storage, size: 20, color: _textColor), title: Text('База данни', style: TextStyle(color: _textColor)), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DbViewerScreen()))),
               ListTile(leading: Icon(Icons.folder_open, size: 20, color: _textColor), title: Text('Файлове', style: TextStyle(color: _textColor)), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LocalFilesViewerScreen()))),

@@ -6,12 +6,11 @@ import 'package:image_cropper/image_cropper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'db_helper.dart';
 import 'fly_menu.dart';
+import 'sync_helper.dart';
 import 'package:flutter_linkify/flutter_linkify.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'color_picker_helper.dart';
 
 // StatefulWidget, който дефинира екрана за създаване, редактиране и преглед на детайлите на бележка.
@@ -35,7 +34,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   final _contentFocusNode = FocusNode();
   String? _imagePath;
 
-  DateTime? _reminderTime;
+  DateTime? _creationTime;
   Color _selectedColor = Colors.white;
   int _isLocalCopy = 0; 
   bool _shouldCopyLocally = false;
@@ -110,8 +109,8 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       _isLocalCopy = widget.item!['isLocalCopy'] ?? 0;
       if (widget.item!['id'] == null && _imagePath != null && _isLocalCopy == 0) { _shouldCopyLocally = true; } else { _shouldCopyLocally = _isLocalCopy == 1; }
       if (widget.item!['tags'] != null && widget.item!['tags'].toString().isNotEmpty) { _selectedTags = widget.item!['tags'].toString().split(',').map((e) => e.trim()).toList(); }
-      if (widget.item!['reminderTime'] != null) { try { _reminderTime = DateTime.parse(widget.item!['reminderTime']); } catch (e) { debugPrint("Грешка дата: $e"); } }
-      else { _reminderTime = DateTime.now(); }
+      if (widget.item!['creationTime'] != null) { try { _creationTime = DateTime.parse(widget.item!['creationTime']); } catch (e) { debugPrint("Грешка дата: $e"); } }
+      else { _creationTime = DateTime.now(); }
       if (widget.item!['color'] != null) { _selectedColor = Color(widget.item!['color']); } else { await _loadDefaultColor(); }
       _isCompleted = widget.item!['isCompleted'] ?? 0;
       _isTask = _isCompleted == 1 || _isCompleted == 2;
@@ -404,7 +403,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   // Извършва запис на всички промени в базата данни и обновява състоянието на приложението.
   Future<void> _save({bool closeAfterSave = true}) async {
     _formatPricesBeforeSave();
-    _reminderTime = DateTime.now(); // Автоматично обновяваме датата при всяко записване
+    _creationTime ??= DateTime.now(); // Задава се само при създаване
     String? finalPath = _imagePath;
     int finalIsLocal = _isLocalCopy;
     if (_imagePath != null && _shouldCopyLocally && _isLocalCopy == 0) {
@@ -415,7 +414,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       'title': _titleController.text.trim(),
       'content': _contentController.text.trim(),
       'imagePath': finalPath,
-      'reminderTime': _reminderTime?.toIso8601String(),
+      'creationTime': _creationTime?.toIso8601String(),
       'color': _selectedColor.toARGB32(),
       'isCompleted': _isTask ? (_isCompleted == 1 ? 1 : 2) : 0,
       'isLocalCopy': finalIsLocal,
@@ -430,6 +429,9 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
         await dbHelper.updateItem(data); 
       }
       widget.onSaved();
+      if (SyncHelper().currentUser != null) {
+        SyncHelper().syncNotes();
+      }
       if (closeAfterSave && mounted) {
         setState(() => _isEditing = false);
         Navigator.pop(context);
@@ -457,9 +459,9 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     if (item['tags'] != null && item['tags'].toString().isNotEmpty) {
       _selectedTags = item['tags'].toString().split(',').map((e) => e.trim()).toList();
     }
-    if (item['reminderTime'] != null) {
-      try { _reminderTime = DateTime.parse(item['reminderTime']); } catch (e) { _reminderTime = DateTime.now(); }
-    } else { _reminderTime = DateTime.now(); }
+    if (item['creationTime'] != null) {
+      try { _creationTime = DateTime.parse(item['creationTime']); } catch (e) { _creationTime = DateTime.now(); }
+    } else { _creationTime = DateTime.now(); }
     if (item['color'] != null) { _selectedColor = Color(item['color']); }
     _isCompleted = item['isCompleted'] ?? 0;
     _isTask = _isCompleted == 1 || _isCompleted == 2;
@@ -781,6 +783,9 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     }
     if (!mounted) return;
     await dbHelper.deleteItem(widget.item!['id']);
+    if (SyncHelper().currentUser != null && widget.item?['uuid'] != null) {
+      SyncHelper().deleteNoteRemote(widget.item!['uuid']);
+    }
     widget.onSaved();
     if (mounted) Navigator.of(context).pop();
   }
