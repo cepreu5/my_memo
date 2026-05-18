@@ -430,6 +430,9 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       }
       widget.onSaved();
       if (SyncHelper().currentUser != null) {
+        if (finalPath != null && finalIsLocal == 1 && _shouldCopyLocally) {
+          SyncHelper().uploadSingleImageToDrive(finalPath);
+        }
         SyncHelper().syncNotes();
       }
       if (closeAfterSave && mounted) {

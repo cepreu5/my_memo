@@ -4,6 +4,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:io';
 import 'dart:convert';
+import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'package:archive/archive_io.dart';
 import 'package:path/path.dart' as p;
@@ -126,6 +127,22 @@ class SyncHelper {
         if (!existsLocally) {
           final toInsert = Map<String, dynamic>.from(remote)..remove('id');
           await _dbHelper.insertItem(toInsert);
+        }
+        
+        if (remote['isLocalCopy'] == 1 && remote['imagePath'] != null) {
+          final fileName = p.basename(remote['imagePath']);
+          final appDir = await getApplicationDocumentsDirectory();
+          final localExpectedPath = p.join(appDir.path, fileName);
+          if (!File(localExpectedPath).existsSync()) {
+            await downloadSingleImageFromDrive(fileName, localExpectedPath);
+            final updatedLocal = await _dbHelper.queryAllRows();
+            final noteToUpdate = updatedLocal.firstWhere((n) => n['uuid'] == uuid, orElse: () => {});
+            if (noteToUpdate.isNotEmpty) {
+              final newNote = Map<String, dynamic>.from(noteToUpdate);
+              newNote['imagePath'] = localExpectedPath;
+              await _dbHelper.updateItem(newNote);
+            }
+          }
         }
       }
       return null;
@@ -290,6 +307,80 @@ class SyncHelper {
     } catch (e) {
       debugPrint("Грешка при възстановяване: $e");
       return "Грешка: $e";
+    }
+  }
+
+  Future<void> uploadSingleImageToDrive(String localPath) async {
+    final googleUser = _googleSignIn.currentUser ?? await _googleSignIn.signInSilently();
+    if (googleUser == null) return;
+    final token = (await googleUser.authentication).accessToken;
+    if (token == null) return;
+
+    final fileName = 'MyMemoSync_${p.basename(localPath)}';
+    
+    const boundary = '----DriveUploadBoundary';
+    final header = '--$boundary\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'
+        '{"name": "$fileName"}\r\n'
+        '--$boundary\r\nContent-Type: image/jpeg\r\n\r\n';
+    const footer = '\r\n--$boundary--\r\n';
+    
+    final headerBytes = utf8.encode(header);
+    final footerBytes = utf8.encode(footer);
+    final file = File(localPath);
+    if (!file.existsSync()) return;
+    
+    final fileBytes = file.readAsBytesSync();
+    final bodyBytes = [...headerBytes, ...fileBytes, ...footerBytes];
+    
+    try {
+      await http.post(
+        Uri.parse("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart"),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'multipart/related; boundary=$boundary',
+          'Content-Length': bodyBytes.length.toString(),
+        },
+        body: bodyBytes,
+      );
+    } catch (e) {
+      debugPrint("Грешка при фоново качване на снимка: $e");
+    }
+  }
+
+  Future<void> downloadSingleImageFromDrive(String originalFileName, String savePath) async {
+    final googleUser = _googleSignIn.currentUser ?? await _googleSignIn.signInSilently();
+    if (googleUser == null) return;
+    final token = (await googleUser.authentication).accessToken;
+    if (token == null) return;
+
+    final syncName = 'MyMemoSync_$originalFileName';
+    try {
+      final searchRes = await http.get(
+        Uri.parse("https://www.googleapis.com/drive/v3/files?q=name='$syncName' and trashed=false"),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      if (searchRes.statusCode != 200) return;
+      final data = jsonDecode(searchRes.body);
+      final files = data['files'] as List;
+      if (files.isEmpty) return; // Няма я в облака
+
+      final fileId = files[0]['id'];
+      final downloadRes = await http.get(
+        Uri.parse("https://www.googleapis.com/drive/v3/files/$fileId?alt=media"),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (downloadRes.statusCode == 200) {
+        await File(savePath).writeAsBytes(downloadRes.bodyBytes);
+        
+        // Изтриваме я от облака, защото вече е преминала (pass-through)
+        await http.delete(
+          Uri.parse("https://www.googleapis.com/drive/v3/files/$fileId"),
+          headers: {'Authorization': 'Bearer $token'},
+        );
+      }
+    } catch (e) {
+      debugPrint("Грешка при фоново изтегляне на снимка: $e");
     }
   }
 }
