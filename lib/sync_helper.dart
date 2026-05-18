@@ -23,9 +23,36 @@ class SyncHelper {
     ],
   );
   final DatabaseHelper _dbHelper = DatabaseHelper();
+  
+  StreamSubscription<QuerySnapshot>? _notesSubscription;
 
   User? get currentUser => _auth.currentUser;
   Stream<User?> get authStateChanges => _auth.authStateChanges();
+
+  void startRealtimeSync(VoidCallback onUpdated) {
+    final user = currentUser;
+    if (user == null) return;
+    
+    _notesSubscription?.cancel();
+    _notesSubscription = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('notes')
+        .snapshots()
+        .listen((snapshot) async {
+      // Игнорираме локални промени (тези, които устройството само е пратило към Firestore)
+      if (snapshot.metadata.hasPendingWrites) return;
+      
+      // Има нова/обновена бележка от друго устройство (сървърът е пратил данни)
+      await syncNotes();
+      onUpdated();
+    });
+  }
+
+  void stopRealtimeSync() {
+    _notesSubscription?.cancel();
+    _notesSubscription = null;
+  }
 
   Future<User?> signInWithGoogle() async {
     try {
@@ -133,7 +160,7 @@ class SyncHelper {
           final path = local['imagePath'] as String;
           final file = File(path);
           if (file.existsSync()) {
-            encoder.addFile(file);
+            encoder.addFile(file, p.basename(file.path));
             count++;
           }
         }
@@ -240,19 +267,21 @@ class SyncHelper {
       for (final file in archive) {
         if (file.isFile) {
           final fileData = file.content as List<int>;
-          final fileName = file.name;
+          final fileName = p.basename(file.name); // Осигуряваме, че е само името
           final localFile = File(p.join(appDir.path, fileName));
           await localFile.writeAsBytes(fileData);
           
+          bool matched = false;
           for (var note in localNotes) {
             if (note['imagePath'] != null && p.basename(note['imagePath']) == fileName) {
               final updatedNote = Map<String, dynamic>.from(note);
               updatedNote['imagePath'] = localFile.path;
               updatedNote['isLocalCopy'] = 1;
               await _dbHelper.updateItem(updatedNote);
+              matched = true;
             }
           }
-          count++;
+          if (matched) count++;
         }
       }
       

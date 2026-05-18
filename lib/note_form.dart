@@ -893,7 +893,14 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                       ),
                                     ),
                                     if (_isEditing && _imagePath != null)
-                                      const Positioned(right: 8, bottom: 8, child: CircleAvatar(radius: 18, backgroundColor: Colors.black54, child: Icon(Icons.crop, color: Colors.white, size: 20))),
+                                      Positioned(
+                                        right: 8, 
+                                        bottom: 8, 
+                                        child: GestureDetector(
+                                          onTap: _editExistingImage,
+                                          child: const CircleAvatar(radius: 18, backgroundColor: Colors.black54, child: Icon(Icons.crop, color: Colors.white, size: 20)),
+                                        )
+                                      ),
                                   ],
                                 ),
                               ),

@@ -120,11 +120,15 @@ class _MainListScreenState extends State<MainListScreen> {
       await CrossPlatformVideoThumbnails.initialize();
       await _loadSettings();
       await _refreshItems();
-      if (SyncHelper().currentUser != null) {
-        SyncHelper().syncNotes().then((_) {
-          if (mounted) _refreshItems();
-        });
-      }
+      SyncHelper().authStateChanges.listen((user) {
+        if (user != null) {
+          SyncHelper().startRealtimeSync(() {
+            if (mounted) _refreshItems();
+          });
+        } else {
+          SyncHelper().stopRealtimeSync();
+        }
+      });
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         await Future.delayed(const Duration(milliseconds: 500));
         final initialMedia = await ReceiveSharingIntent.instance.getInitialMedia();
