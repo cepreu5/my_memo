@@ -437,4 +437,105 @@ class SyncHelper {
       debugPrint("Грешка при фоново изтегляне на снимка: $e");
     }
   }
+  /// Локален бекъп на бележките и снимките в ZIP архив в Downloads папката.
+  Future<String?> backupNotesLocally() async {
+    try {
+      final localNotes = await _dbHelper.queryAllRows();
+      if (localNotes.isEmpty) return "Няма бележки за архивиране.";
+      final archive = Archive();
+      // Добавяме бележките като JSON
+      final notesJson = jsonEncode(localNotes);
+      final notesBytes = utf8.encode(notesJson);
+      archive.addFile(ArchiveFile('notes.json', notesBytes.length, notesBytes));
+      // Добавяме снимките
+      final Set<String> addedFiles = {};
+      int imageCount = 0;
+      for (var note in localNotes) {
+        if (note['isLocalCopy'] == 1 && note['imagePath'] != null) {
+          final file = File(note['imagePath'] as String);
+          final baseName = p.basename(file.path);
+          if (file.existsSync() && !addedFiles.contains(baseName)) {
+            final bytes = file.readAsBytesSync();
+            archive.addFile(ArchiveFile('images/$baseName', bytes.length, bytes));
+            addedFiles.add(baseName);
+            imageCount++;
+          }
+        }
+      }
+      final zipData = ZipEncoder().encode(archive);
+      // Записваме в Downloads
+      final downloadDir = Directory('/storage/emulated/0/Download');
+      final zipPath = p.join(downloadDir.path, 'MyMemo_Notes_Backup.zip');
+      File(zipPath).writeAsBytesSync(zipData);
+      return "Архивирани ${localNotes.length} бележки и $imageCount снимки.\nФайл: $zipPath";
+    } catch (e) {
+      debugPrint("Грешка при локален бекъп: $e");
+      return "Грешка: $e";
+    }
+  }
+  /// Възстановяване на бележки и снимки от локален ZIP архив.
+  Future<String?> restoreNotesLocally(String zipPath) async {
+    try {
+      final zipFile = File(zipPath);
+      if (!zipFile.existsSync()) return "Файлът не е намерен.";
+      final zipBytes = zipFile.readAsBytesSync();
+      final archive = ZipDecoder().decodeBytes(zipBytes);
+      // Търсим notes.json
+      final notesFile = archive.files.where((f) => f.name == 'notes.json').firstOrNull;
+      if (notesFile == null) return "Архивът не съдържа notes.json.";
+      final notesJson = utf8.decode(notesFile.content as List<int>);
+      final List<dynamic> notesData = jsonDecode(notesJson);
+      if (notesData.isEmpty) return "Архивът не съдържа бележки.";
+      final appDir = await getApplicationDocumentsDirectory();
+      // Извличаме снимките
+      int imageCount = 0;
+      for (final file in archive.files) {
+        if (file.isFile && file.name.startsWith('images/')) {
+          final fileName = p.basename(file.name);
+          final localFile = File(p.join(appDir.path, fileName));
+          await localFile.writeAsBytes(file.content as List<int>);
+          imageCount++;
+        }
+      }
+      // Импортираме бележките
+      final existingNotes = await _dbHelper.queryAllRows();
+      final existingByUuid = <String, Map<String, dynamic>>{};
+      for (var n in existingNotes) {
+        if (n['uuid'] != null) existingByUuid[n['uuid']] = n;
+      }
+      int inserted = 0;
+      int updated = 0;
+      int skipped = 0;
+      for (var noteData in notesData) {
+        final note = Map<String, dynamic>.from(noteData);
+        final uuid = note['uuid'] as String?;
+        // Обновяваме imagePath да сочи към локалната директория
+        if (note['isLocalCopy'] == 1 && note['imagePath'] != null) {
+          final imgBaseName = p.basename(note['imagePath'] as String);
+          note['imagePath'] = p.join(appDir.path, imgBaseName);
+        }
+        if (uuid != null && existingByUuid.containsKey(uuid)) {
+          // Сравняваме по updatedAt — по-новата печели
+          final existing = existingByUuid[uuid]!;
+          final existingUpdated = DateTime.tryParse(existing['updatedAt'] ?? '') ?? DateTime(2000);
+          final importUpdated = DateTime.tryParse(note['updatedAt'] ?? '') ?? DateTime(2000);
+          if (importUpdated.isAfter(existingUpdated)) {
+            note['id'] = existing['id'];
+            await _dbHelper.updateItem(note);
+            updated++;
+          } else {
+            skipped++;
+          }
+        } else {
+          note.remove('id');
+          await _dbHelper.insertItem(note);
+          inserted++;
+        }
+      }
+      return "Нови: $inserted, обновени: $updated, пропуснати: $skipped.\nСнимки: $imageCount";
+    } catch (e) {
+      debugPrint("Грешка при възстановяване: $e");
+      return "Грешка: $e";
+    }
+  }
 }

@@ -854,14 +854,18 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
           context: context,
           builder: (context) => AlertDialog(
             backgroundColor: Color(_appColor),
-            title: Text('Отхвърляне на промените?', style: TextStyle(color: _contrast(Color(_appColor), Colors.black, Colors.white))),
-            content: Text('Имате незапазени промени. Сигурни ли сте, че искате да излезете?', style: TextStyle(color: _contrast(Color(_appColor), Colors.black87, Colors.white70))),
+            title: Text('Запис на промените?', style: TextStyle(color: _contrast(Color(_appColor), Colors.black, Colors.white))),
+            content: Text('Имате незапазени промени. Желаете ли да ги запазите преди да излезете?', style: TextStyle(color: _contrast(Color(_appColor), Colors.black87, Colors.white70))),
             actions: [
               TextButton(onPressed: () => Navigator.pop(context, false), child: Text('Отказ', style: TextStyle(color: _contrast(Color(_appColor), Colors.black54, Colors.white60)))),
               TextButton(onPressed: () {
                 if (_sessionFileCreated && _imagePath != null && _isLocalCopy == 1) { try { File(_imagePath!).deleteSync(); } catch (e) { debugPrint("Грешка чистене при изход: $e"); } }
                 Navigator.pop(context, true);
-              }, child: Text('Отхвърли', style: TextStyle(color: _contrast(Color(_appColor), Colors.black54, Colors.white60)))),
+              }, child: const Text('Отхвърли', style: TextStyle(color: Colors.redAccent))),
+              TextButton(onPressed: () {
+                Navigator.pop(context, false);
+                _save(closeAfterSave: true);
+              }, child: const Text('Запис', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue))),
             ],
           ),
         ) ?? false;

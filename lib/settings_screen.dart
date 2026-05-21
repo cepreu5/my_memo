@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'color_picker_helper.dart';
@@ -306,6 +307,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ],
                 ),
+              Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
+              _buildSectionTitle('Локален архив'),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                child: ElevatedButton.icon(
+                  icon: _isSyncing ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.archive_outlined),
+                  label: const Text('Запис на бележките в архив'),
+                  style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 40)),
+                  onPressed: _isSyncing ? null : () async {
+                    setState(() => _isSyncing = true);
+                    final msg = await SyncHelper().backupNotesLocally();
+                    if (mounted) {
+                      setState(() => _isSyncing = false);
+                      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg ?? 'Готово'), duration: const Duration(seconds: 4)));
+                    }
+                  },
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                child: ElevatedButton.icon(
+                  icon: _isSyncing ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.unarchive_outlined),
+                  label: const Text('Зареждане на бележки от архив'),
+                  style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 40)),
+                  onPressed: _isSyncing ? null : () async {
+                    final result = await FilePicker.platform.pickFiles(
+                      type: FileType.custom,
+                      allowedExtensions: ['zip'],
+                    );
+                    if (result == null || result.files.single.path == null) return;
+                    if (!mounted) return;
+                    setState(() => _isSyncing = true);
+                    final msg = await SyncHelper().restoreNotesLocally(result.files.single.path!);
+                    if (mounted) {
+                      setState(() => _isSyncing = false);
+                      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg ?? 'Готово'), duration: const Duration(seconds: 4)));
+                    }
+                  },
+                ),
+              ),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
               ListTile(leading: Icon(Icons.storage, size: 20, color: _textColor), title: Text('База данни', style: TextStyle(color: _textColor)), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DbViewerScreen()))),
               ListTile(leading: Icon(Icons.folder_open, size: 20, color: _textColor), title: Text('Файлове', style: TextStyle(color: _textColor)), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LocalFilesViewerScreen()))),
