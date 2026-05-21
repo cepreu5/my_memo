@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
+import 'dart:math';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -53,6 +54,9 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   int _isCompleted = 0;
   bool _forceTwoDecimals = true;
   bool _canPop = false;
+  int? _activeNoteId;
+  String? _activeNoteUuid;
+  bool _isSaving = false;
   int _appColor = const Color(0xFFFF5E00).toARGB32();
   final List<Color> _noteColors = [
     Colors.white,
@@ -91,6 +95,8 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
 
   // Зарежда началните данни на бележката, размерите на шрифтовете и потребителската цветова палитра.
   Future<void> _initializeData() async {
+    _activeNoteId = widget.item?['id'];
+    _activeNoteUuid = widget.item?['uuid'];
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _fontSizeTitle = prefs.getDouble('form_title_size') ?? 18;
@@ -334,7 +340,8 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       final directory = await getApplicationDocumentsDirectory();
       final String fileName = "img_${DateTime.now().millisecondsSinceEpoch}${p.extension(originalPath)}";
       final String newPath = p.join(directory.path, fileName);
-      await File(originalPath).copy(newPath);
+      final bytes = await File(originalPath).readAsBytes();
+      await File(newPath).writeAsBytes(bytes);
       return newPath;
     } catch (e) { debugPrint("Грешка копиране: $e"); }
     return null;
@@ -402,6 +409,8 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
 
   // Извършва запис на всички промени в базата данни и обновява състоянието на приложението.
   Future<void> _save({bool closeAfterSave = true}) async {
+    if (_isSaving) return;
+    _isSaving = true;
     _formatPricesBeforeSave();
     _creationTime ??= DateTime.now(); // Задава се само при създаване
     String? finalPath = _imagePath;
@@ -410,6 +419,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       final String? copied = await _copyImageLocally(_imagePath!);
       if (copied != null) { finalPath = copied; finalIsLocal = 1; }
     }
+    _activeNoteUuid ??= '${DateTime.now().microsecondsSinceEpoch}_${Random().nextInt(999999)}';
     final Map<String, dynamic> data = {
       'title': _titleController.text.trim(),
       'content': _contentController.text.trim(),
@@ -419,14 +429,19 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       'isCompleted': _isTask ? (_isCompleted == 1 ? 1 : 2) : 0,
       'isLocalCopy': finalIsLocal,
       'tags': _selectedTags.join(', '),
+      'uuid': _activeNoteUuid,
     };
     try {
-      if (widget.item == null || widget.item!['id'] == null) { 
+      if (_activeNoteId == null) {
         final id = await dbHelper.insertItem(data);
-        if (widget.item != null) widget.item!['id'] = id;
-      } else { 
-        data['id'] = widget.item!['id']; 
-        await dbHelper.updateItem(data); 
+        _activeNoteId = id;
+        if (widget.item != null) {
+          widget.item!['id'] = id;
+          widget.item!['uuid'] = _activeNoteUuid;
+        }
+      } else {
+        data['id'] = _activeNoteId;
+        await dbHelper.updateItem(data);
       }
       widget.onSaved();
       if (SyncHelper().currentUser != null) {
@@ -439,7 +454,11 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
         setState(() => _isEditing = false);
         Navigator.pop(context);
       }
-    } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Грешка запис: $e'), backgroundColor: Colors.red)); }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Грешка запис: $e'), backgroundColor: Colors.red));
+    } finally {
+      _isSaving = false;
+    }
   }
 
   // Управлява навигацията към следваща или предишна бележка чрез плъзгане по екрана.
@@ -454,6 +473,8 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
 
   // Реинициализира всички полета и настройки при превключване към друга бележка.
   void _initializeDataFromItem(Map<String, dynamic> item) {
+    _activeNoteId = item['id'];
+    _activeNoteUuid = item['uuid'];
     _titleController.text = item['title']?.toString() ?? "";
     _contentController.text = item['content']?.toString() ?? "";
     _imagePath = item['imagePath'];

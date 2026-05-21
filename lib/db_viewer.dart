@@ -105,66 +105,77 @@ class _DbViewerScreenState extends State<DbViewerScreen> {
           ? const Center(child: CircularProgressIndicator())
           : _records.isEmpty
               ? const Center(child: Text('Базата данни е празна.'))
-              : Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Text(
-                        'Запис ${_currentIndex + 1} от ${_records.length}',
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    if (_records[_currentIndex]['imagePath'] != null)
+              : GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onHorizontalDragEnd: (details) {
+                    if (details.primaryVelocity == null) return;
+                    if (details.primaryVelocity! > 100) {
+                      _prev();
+                    } else if (details.primaryVelocity! < -100) {
+                      _next();
+                    }
+                  },
+                  child: Column(
+                    children: [
                       Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8.0),
-                        child: Container(
-                          height: 150,
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey),
-                          ),
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              Image.file(
-                                File(_records[_currentIndex]['imagePath']),
-                                errorBuilder: (context, error, stackTrace) => const Center(child: Text("Файлът не е намерен")),
-                              ),
-                            ],
-                          ),
+                        padding: const EdgeInsets.all(16.0),
+                        child: Text(
+                          'Запис ${_currentIndex + 1} от ${_records.length}',
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                         ),
                       ),
-                    Expanded(
-                      child: ListView(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        children: _records[_currentIndex].entries.map((e) {
-                          return Card(
-                            child: ListTile(
-                              title: Text(e.key, style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
-                              subtitle: Text(e.value?.toString() ?? 'null', style: const TextStyle(fontSize: 16)),
+                      if (_records[_currentIndex]['imagePath'] != null)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8.0),
+                          child: Container(
+                            height: 150,
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey),
                             ),
-                          );
-                        }).toList(),
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Image.file(
+                                  File(_records[_currentIndex]['imagePath']),
+                                  errorBuilder: (context, error, stackTrace) => const Center(child: Text("Файлът не е намерен")),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      Expanded(
+                        child: ListView(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          children: _records[_currentIndex].entries.map((e) {
+                            return Card(
+                              child: ListTile(
+                                title: Text(e.key, style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+                                subtitle: Text(e.value?.toString() ?? 'null', style: const TextStyle(fontSize: 16)),
+                              ),
+                            );
+                          }).toList(),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        ElevatedButton.icon(
-                          onPressed: _currentIndex > 0 ? _prev : null,
-                          icon: const Icon(Icons.arrow_back),
-                          label: const Text('Предишен'),
-                        ),
-                        ElevatedButton.icon(
-                          onPressed: _currentIndex < _records.length - 1 ? _next : null,
-                          icon: const Icon(Icons.arrow_forward),
-                          label: const Text('Следващ'),
-                          iconAlignment: IconAlignment.end,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 40),
-                  ],
+                      const SizedBox(height: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: _currentIndex > 0 ? _prev : null,
+                            icon: const Icon(Icons.arrow_back),
+                            label: const Text('Предишен'),
+                          ),
+                          ElevatedButton.icon(
+                            onPressed: _currentIndex < _records.length - 1 ? _next : null,
+                            icon: const Icon(Icons.arrow_forward),
+                            label: const Text('Следващ'),
+                            iconAlignment: IconAlignment.end,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 40),
+                    ],
+                  ),
                 ),
     );
   }

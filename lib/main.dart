@@ -59,6 +59,7 @@ class _MainListScreenState extends State<MainListScreen> {
   List<Map<String, dynamic>> _filteredItems = [];
   Set<String> _allExistingTags = {};
   List<String> _selectedFilterTags = [];
+  List<String> _excludedFilterTags = [];
   bool _isGridView = true;
   int _appBackgroundColor = const Color(0xFFFF5E00).toARGB32();
   bool _filterMatchAll = false;
@@ -365,6 +366,11 @@ class _MainListScreenState extends State<MainListScreen> {
           if (_filterMatchAll) { matchesTags = _selectedFilterTags.every((t) => noteTagsList.contains(t)); } 
           else { matchesTags = _selectedFilterTags.any((t) => noteTagsList.contains(t)); }
         }
+        if (_excludedFilterTags.isNotEmpty) {
+          if (matchesTags) {
+            matchesTags = !_excludedFilterTags.any((t) => noteTagsList.contains(t));
+          }
+        }
         bool matchesDate = true;
         if (_startDate != null && _endDate != null) {
           final dateKey = _filterByUpdatedAt ? 'updatedAt' : 'creationTime';
@@ -388,8 +394,8 @@ class _MainListScreenState extends State<MainListScreen> {
         if (!aPinned && bPinned) return 1;
 
         if (_sortById) {
-          final valA = (a['id'] ?? 0);
-          final valB = (b['id'] ?? 0);
+          final valA = (a['creationTime'] ?? a['updatedAt'] ?? '').toString();
+          final valB = (b['creationTime'] ?? b['updatedAt'] ?? '').toString();
           return _reverseOrder ? valB.compareTo(valA) : valA.compareTo(valB);
         } else {
           final valA = (a['updatedAt'] ?? '').toString();
@@ -783,26 +789,46 @@ class _MainListScreenState extends State<MainListScreen> {
                       spacing: 4, runSpacing: 4,
                       children: allTags.map((tag) {
                         bool isSelected = _selectedFilterTags.contains(tag);
-                        return FilterChip(
-                          visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          padding: EdgeInsets.zero,
-                          labelPadding: const EdgeInsets.symmetric(horizontal: 4.0),
-                          label: Text(tag, style: const TextStyle(fontSize: 10)),
-                          selected: isSelected,
-                          onSelected: (val) {
+                        bool isExcluded = _excludedFilterTags.contains(tag);
+                        return GestureDetector(
+                          onLongPress: () {
                             setState(() {
-                              if (val) { if (!_selectedFilterTags.contains(tag)) _selectedFilterTags.add(tag); } 
-                              else { _selectedFilterTags.remove(tag); }
+                              if (isExcluded) {
+                                _excludedFilterTags.remove(tag);
+                              } else {
+                                _selectedFilterTags.remove(tag);
+                                _excludedFilterTags.add(tag);
+                              }
                               _filterItems(_searchController.text);
                             });
                             setModalState(() {});
                           },
-                          showCheckmark: false,
-                          selectedColor: Colors.yellow[700],
-                          backgroundColor: Colors.cyan[200],
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          side: isSelected ? const BorderSide(color: Colors.cyan, width: 1) : BorderSide(color: Colors.cyan[400]!),
+                          child: FilterChip(
+                            visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            padding: EdgeInsets.zero,
+                            labelPadding: const EdgeInsets.symmetric(horizontal: 4.0),
+                            label: Text(tag, style: TextStyle(fontSize: 10, decoration: isExcluded ? TextDecoration.lineThrough : null)),
+                            selected: isSelected || isExcluded,
+                            onSelected: (val) {
+                              setState(() {
+                                if (isExcluded) {
+                                  _excludedFilterTags.remove(tag);
+                                } else if (val) {
+                                  if (!_selectedFilterTags.contains(tag)) _selectedFilterTags.add(tag);
+                                } else {
+                                  _selectedFilterTags.remove(tag);
+                                }
+                                _filterItems(_searchController.text);
+                              });
+                              setModalState(() {});
+                            },
+                            showCheckmark: false,
+                            selectedColor: isExcluded ? Colors.grey[400] : Colors.yellow[700],
+                            backgroundColor: Colors.cyan[200],
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            side: (isSelected || isExcluded) ? BorderSide(color: isExcluded ? Colors.redAccent : Colors.cyan, width: 1) : BorderSide(color: Colors.cyan[400]!),
+                          ),
                         );
                       }).toList(),
                     ),
@@ -810,7 +836,7 @@ class _MainListScreenState extends State<MainListScreen> {
               actions: [
                 TextButton(
                   onPressed: () {
-                    setState(() { _selectedFilterTags.clear(); _filterItems(_searchController.text); });
+                    setState(() { _selectedFilterTags.clear(); _excludedFilterTags.clear(); _filterItems(_searchController.text); });
                     setModalState(() {});
                   },
                   child: const Text('Изчисти', style: TextStyle(color: Colors.redAccent)),
@@ -1037,6 +1063,7 @@ class _MainListScreenState extends State<MainListScreen> {
                 TagScrollFilter(
                   allTags: _allExistingTags.where((t) => t != '📌').toList(),
                   selectedTags: _selectedFilterTags,
+                  excludedTags: _excludedFilterTags,
                   textColor: appBarTextColor,
                   startDate: _startDate,
                   endDate: _endDate,
@@ -1049,6 +1076,10 @@ class _MainListScreenState extends State<MainListScreen> {
                     setState(() { _selectedFilterTags = newList; });
                     _filterItems(_searchController.text);
                   },
+                  onExcludedChanged: (newList) {
+                    setState(() { _excludedFilterTags = newList; });
+                    _filterItems(_searchController.text);
+                  },
                   onClearAll: () async {
                     final prefs = await SharedPreferences.getInstance();
                     await prefs.setBool('sort_by_id', false);
@@ -1056,6 +1087,7 @@ class _MainListScreenState extends State<MainListScreen> {
                     if (!mounted) return;
                     setState(() {
                       _selectedFilterTags.clear();
+                      _excludedFilterTags.clear();
                       _startDate = null;
                       _endDate = null;
                       _filterColor = null;
@@ -1089,7 +1121,7 @@ class _MainListScreenState extends State<MainListScreen> {
                   ),
                 FlyAction(icon: Icons.filter_list, onTap: _showFilterDialog, label: "Филтри"),
                 FlyAction(icon: Icons.label_outline, onTap: _showGlobalTagsModal, label: "Етикети"),
-                if (_selectedFilterTags.isNotEmpty || _startDate != null || _filterColor != null || _filterTasksOnly || _reverseOrder || _sortById)
+                if (_selectedFilterTags.isNotEmpty || _excludedFilterTags.isNotEmpty || _startDate != null || _filterColor != null || _filterTasksOnly || _reverseOrder || _sortById)
                   FlyAction(
                     icon: Icons.label_off_outlined,
                     onTap: () async {
@@ -1099,6 +1131,7 @@ class _MainListScreenState extends State<MainListScreen> {
                       if (!mounted) return;
                       setState(() {
                         _selectedFilterTags.clear();
+                        _excludedFilterTags.clear();
                         _startDate = null;
                         _endDate = null;
                         _filterColor = null;
@@ -1412,7 +1445,7 @@ class _MainListScreenState extends State<MainListScreen> {
       if (availableWidth < 0) availableWidth = 0;
       
       final textPainter = TextPainter(
-        text: TextSpan(text: finalString, style: TextStyle(fontSize: _fontSizeContent, fontFamily: 'monospace')),
+        text: TextSpan(text: finalString, style: TextStyle(fontSize: _fontSizeContent, fontFamily: isPriceLine ? 'monospace' : null)),
         textDirection: TextDirection.ltr,
       )..layout(maxWidth: availableWidth);
       
@@ -1441,7 +1474,7 @@ class _MainListScreenState extends State<MainListScreen> {
                   },
                   maxLines: linesForThisText,
                   overflow: isPriceLine ? TextOverflow.clip : (shouldEllipsis ? TextOverflow.ellipsis : TextOverflow.visible),
-                  style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor, decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.0, fontFamily: 'monospace'),
+                  style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor, decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.0, fontFamily: isPriceLine ? 'monospace' : null),
                   linkStyle: linkStyle,
                 )
               : Text(
@@ -1449,7 +1482,7 @@ class _MainListScreenState extends State<MainListScreen> {
                   maxLines: linesForThisText,
                   softWrap: !isPriceLine,
                   overflow: isPriceLine ? TextOverflow.clip : (shouldEllipsis ? TextOverflow.ellipsis : TextOverflow.visible),
-                  style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor, decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.0, fontFamily: 'monospace'),
+                  style: TextStyle(fontSize: _fontSizeContent, color: secondaryTextColor, decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.0, fontFamily: isPriceLine ? 'monospace' : null),
                 ),
           ),
         ],

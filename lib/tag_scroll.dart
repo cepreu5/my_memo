@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 class TagScrollFilter extends StatefulWidget {
   final List<String> allTags;
   final List<String> selectedTags;
+  final List<String>? excludedTags;
   final Color textColor;
   final Function(List<String>) onSelectionChanged;
+  final Function(List<String>)? onExcludedChanged;
   final DateTime? startDate;
   final DateTime? endDate;
   final int? filterColor;
@@ -18,7 +20,9 @@ class TagScrollFilter extends StatefulWidget {
     super.key,
     required this.allTags,
     required this.selectedTags,
+    this.excludedTags,
     required this.onSelectionChanged,
+    this.onExcludedChanged,
     required this.textColor,
     required this.startDate,
     required this.endDate,
@@ -46,14 +50,15 @@ class _TagScrollFilterState extends State<TagScrollFilter> {
   @override
   Widget build(BuildContext context) {
     final List<String> sortedTags = List.from(widget.allTags);
+    final List<String> excludedTags = widget.excludedTags ?? [];
     sortedTags.sort((a, b) {
-      bool aSelected = widget.selectedTags.contains(a);
-      bool bSelected = widget.selectedTags.contains(b);
+      bool aSelected = widget.selectedTags.contains(a) || excludedTags.contains(a);
+      bool bSelected = widget.selectedTags.contains(b) || excludedTags.contains(b);
       if (aSelected && !bSelected) return -1;
       if (!aSelected && bSelected) return 1;
       return a.compareTo(b);
     });
-    final bool hasSelection = widget.selectedTags.isNotEmpty || widget.startDate != null || widget.filterColor != null || widget.tasksOnly || widget.reverseOrder || widget.sortById;
+    final bool hasSelection = widget.selectedTags.isNotEmpty || excludedTags.isNotEmpty || widget.startDate != null || widget.filterColor != null || widget.tasksOnly || widget.reverseOrder || widget.sortById;
     return Container(
       height: 40,
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -124,26 +129,51 @@ class _TagScrollFilterState extends State<TagScrollFilter> {
                 }
                 final tag = sortedTags[index - 1];
                 final isSelected = widget.selectedTags.contains(tag);
+                final isExcluded = excludedTags.contains(tag);
                 return Padding(
                   padding: const EdgeInsets.only(right: 4.0),
-                  child: FilterChip(
-                    visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    padding: EdgeInsets.zero,
-                    labelPadding: const EdgeInsets.symmetric(horizontal: 3.0),
-                    label: Text(tag, style: TextStyle(fontSize: 10, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: Colors.black)),
-                    selected: isSelected,
-                    onSelected: (selected) {
-                      List<String> newList = List.from(widget.selectedTags);
-                      if (selected) { newList.add(tag); } else { newList.remove(tag); }
-                      widget.onSelectionChanged(newList);
+                  child: GestureDetector(
+                    onLongPress: () {
+                      if (widget.onExcludedChanged == null) return;
+                      List<String> newExcluded = List.from(excludedTags);
+                      List<String> newSelected = List.from(widget.selectedTags);
+                      if (isExcluded) {
+                        newExcluded.remove(tag);
+                      } else {
+                        newSelected.remove(tag);
+                        newExcluded.add(tag);
+                      }
+                      widget.onSelectionChanged(newSelected);
+                      widget.onExcludedChanged!(newExcluded);
                       _scrollController.animateTo(0.0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
                     },
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    showCheckmark: false,
-                    selectedColor: Colors.yellow[700],
-                    backgroundColor: Colors.cyan[200],
-                    side: isSelected ? const BorderSide(color: Colors.cyan, width: 1) : BorderSide(color: Colors.cyan[400]!),
+                    child: FilterChip(
+                      visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      padding: EdgeInsets.zero,
+                      labelPadding: const EdgeInsets.symmetric(horizontal: 3.0),
+                      label: Text(tag, style: TextStyle(fontSize: 10, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: Colors.black, decoration: isExcluded ? TextDecoration.lineThrough : null)),
+                      selected: isSelected || isExcluded,
+                      onSelected: (selected) {
+                        List<String> newSelected = List.from(widget.selectedTags);
+                        List<String> newExcluded = List.from(excludedTags);
+                        if (isExcluded) {
+                          newExcluded.remove(tag);
+                        } else if (selected) { 
+                          newSelected.add(tag); 
+                        } else { 
+                          newSelected.remove(tag); 
+                        }
+                        widget.onSelectionChanged(newSelected);
+                        if (widget.onExcludedChanged != null) widget.onExcludedChanged!(newExcluded);
+                        _scrollController.animateTo(0.0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+                      },
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      showCheckmark: false,
+                      selectedColor: isExcluded ? Colors.grey[400] : Colors.yellow[700],
+                      backgroundColor: Colors.cyan[200],
+                      side: (isSelected || isExcluded) ? BorderSide(color: isExcluded ? Colors.redAccent : Colors.cyan, width: 1) : BorderSide(color: Colors.cyan[400]!),
+                    ),
                   ),
                 );
               },

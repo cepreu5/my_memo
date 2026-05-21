@@ -1,3 +1,22 @@
+USB debug: Как работи правилно процесът
+Свързваш телефона с USB кабел
+
+Активираш:
+USB debugging
+Wireless debugging
+
+Влизаш в Wireless debugging → Pair device with pairing code
+
+На компютъра:
+adb pair <ip>:<port>
+
+След успешен pairing:
+adb connect <ip>:<port> - използва се IP Address & Port, не pairing порта
+
+Изключваш кабела — вече работи само по Wi‑Fi
+
+============================================
+
 adb install "C:\dev\Projects\Androd\my_scr\android\app\build\outputs\flutter-apk\app-debug.apk"
 adb uninstall com.example.my_scr
 adb shell pm list packages | findstr "my_scr"

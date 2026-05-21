@@ -70,41 +70,56 @@ class _LocalFilesViewerScreenState extends State<LocalFilesViewerScreen> {
           ? const Center(child: CircularProgressIndicator())
           : _files.isEmpty
               ? const Center(child: Text('Няма локални файлове.'))
-              : Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: FutureBuilder<int>(
-                        future: _files[_currentIndex].length(),
-                        builder: (context, snapshot) {
-                          final size = snapshot.hasData 
-                              ? '${(snapshot.data! / 1024).toStringAsFixed(2)} KB' 
-                              : '...';
-                          return Text('Файл ${_currentIndex + 1} от ${_files.length}\n${_files[_currentIndex].path.split('/').last}\nРазмер: $size');
-                        },
-                      ),
-                    ),
-                    Expanded(
-                      child: InteractiveViewer(
-                        child: Image.file(_files[_currentIndex]),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        ElevatedButton(
-                          onPressed: _currentIndex > 0 ? () => setState(() => _currentIndex--) : null,
-                          child: const Text('Предишен'),
+              : GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onHorizontalDragEnd: (details) {
+                    if (details.primaryVelocity == null) return;
+                    if (details.primaryVelocity! > 100) {
+                      if (_currentIndex > 0) {
+                        setState(() => _currentIndex--);
+                      }
+                    } else if (details.primaryVelocity! < -100) {
+                      if (_currentIndex < _files.length - 1) {
+                        setState(() => _currentIndex++);
+                      }
+                    }
+                  },
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: FutureBuilder<int>(
+                          future: _files[_currentIndex].length(),
+                          builder: (context, snapshot) {
+                            final size = snapshot.hasData 
+                                ? '${(snapshot.data! / 1024).toStringAsFixed(2)} KB' 
+                                : '...';
+                            return Text('Файл ${_currentIndex + 1} от ${_files.length}\n${_files[_currentIndex].path.split('/').last}\nРазмер: $size');
+                          },
                         ),
-                        ElevatedButton(
-                          onPressed: _currentIndex < _files.length - 1 ? () => setState(() => _currentIndex++) : null,
-                          child: const Text('Следващ'),
+                      ),
+                      Expanded(
+                        child: InteractiveViewer(
+                          child: Image.file(_files[_currentIndex]),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 40),
-                  ],
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          ElevatedButton(
+                            onPressed: _currentIndex > 0 ? () => setState(() => _currentIndex--) : null,
+                            child: const Text('Предишен'),
+                          ),
+                          ElevatedButton(
+                            onPressed: _currentIndex < _files.length - 1 ? () => setState(() => _currentIndex++) : null,
+                            child: const Text('Следващ'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 40),
+                    ],
+                  ),
                 ),
     );
   }
