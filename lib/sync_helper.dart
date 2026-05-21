@@ -111,11 +111,14 @@ class SyncHelper {
         final uuid = local['uuid'] as String?;
         if (uuid != null && deletedUuids.contains(uuid)) {
           if (local['isLocalCopy'] == 1 && local['imagePath'] != null) {
-            try {
-              final f = File(local['imagePath']);
-              if (await f.exists()) await f.delete();
-            } catch (e) {
-              debugPrint("Грешка при изтриване на файл на изтрита бележка: $e");
+            bool inUse = await _dbHelper.isImagePathUsed(local['imagePath'], local['id']);
+            if (!inUse) {
+              try {
+                final f = File(local['imagePath']);
+                if (await f.exists()) await f.delete();
+              } catch (e) {
+                debugPrint("Грешка при изтриване на файл на изтрита бележка: $e");
+              }
             }
           }
           await _dbHelper.deleteItem(local['id']);

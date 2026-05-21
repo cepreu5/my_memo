@@ -900,14 +900,17 @@ class _MainListScreenState extends State<MainListScreen> {
         titleSpacing: 0,
         backgroundColor: bgColor.withValues(alpha: 0.9),
         foregroundColor: appBarTextColor,
-        leading: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 2.0),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8.0),
-            child: Image.asset('assets/app_icon_0.png', fit: BoxFit.cover),
+        leading: Center(
+          child: SizedBox(
+            height: 40,
+            width: 40,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8.0),
+              child: Image.asset('assets/app_icon_0.png', fit: BoxFit.cover),
+            ),
           ),
         ),
-        leadingWidth: 52,
+        leadingWidth: 48,
         title: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8.0),
           child: LayoutBuilder(
@@ -934,54 +937,58 @@ class _MainListScreenState extends State<MainListScreen> {
                 FocusScope.of(context).unfocus();
               },
               fieldViewBuilder: (BuildContext context, TextEditingController textEditingController, FocusNode focusNode, VoidCallback onFieldSubmitted) {
-                return TextField(
-                  controller: textEditingController,
-                  focusNode: focusNode,
-                  onChanged: (val) => _filterItems(val),
-                  onSubmitted: (val) {
-                    _filterItems(val);
-                    _addAutoSearchTerm(val);
-                    onFieldSubmitted();
-                  },
-                  style: TextStyle(color: appBarTextColor),
-                  decoration: InputDecoration(
-                    hintText: 'Търсене...',
-                    hintStyle: TextStyle(color: appBarTextColor.withValues(alpha: 0.6)),
-                    prefixIcon: textEditingController.text.isNotEmpty 
-                      ? IconButton(
-                          icon: Icon(_isSearchSavedTemporarily ? Icons.check : Icons.save_outlined, size: 20, color: _isSearchSavedTemporarily ? Colors.green : appBarTextColor.withValues(alpha: 0.8)),
-                          onPressed: () => _saveExplicitSearch(textEditingController.text),
-                        )
-                      : Icon(Icons.search, color: appBarTextColor.withValues(alpha: 0.6)),
-                    suffixIcon: (textEditingController.text.isNotEmpty || focusNode.hasFocus)
-                      ? Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (textEditingController.text.isNotEmpty)
-                              IconButton(
-                                icon: Icon(Icons.clear, size: 20, color: appBarTextColor), 
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                                visualDensity: VisualDensity.compact,
-                                onPressed: () { textEditingController.clear(); _filterItems(''); focusNode.unfocus(); }
-                              ),
-                            if (focusNode.hasFocus)
-                              IconButton(
-                                icon: Icon(Icons.keyboard_arrow_up, size: 20, color: appBarTextColor.withValues(alpha: 0.6)), 
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                                visualDensity: VisualDensity.compact,
-                                onPressed: () => focusNode.unfocus(),
-                              ),
-                            if (textEditingController.text.isNotEmpty || focusNode.hasFocus)
-                              const SizedBox(width: 4),
-                          ],
-                        ) 
-                      : null,
-                    filled: true,
-                    fillColor: (isDarkBg ? Colors.white : Colors.black).withValues(alpha: 0.1),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                return SizedBox(
+                  height: 40,
+                  child: TextField(
+                    controller: textEditingController,
+                    focusNode: focusNode,
+                    onChanged: (val) => _filterItems(val),
+                    onSubmitted: (val) {
+                      _filterItems(val);
+                      _addAutoSearchTerm(val);
+                      onFieldSubmitted();
+                    },
+                    style: TextStyle(color: appBarTextColor),
+                    cursorColor: appBarTextColor,
+                    decoration: InputDecoration(
+                      hintText: 'Търсене...',
+                      hintStyle: TextStyle(color: appBarTextColor.withValues(alpha: 0.6)),
+                      prefixIcon: textEditingController.text.isNotEmpty 
+                        ? IconButton(
+                            icon: Icon(_isSearchSavedTemporarily ? Icons.check : Icons.save_outlined, size: 20, color: _isSearchSavedTemporarily ? Colors.green : appBarTextColor.withValues(alpha: 0.8)),
+                            onPressed: () => _saveExplicitSearch(textEditingController.text),
+                          )
+                        : Icon(Icons.search, color: appBarTextColor.withValues(alpha: 0.6)),
+                      suffixIcon: (textEditingController.text.isNotEmpty || focusNode.hasFocus)
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (textEditingController.text.isNotEmpty)
+                                IconButton(
+                                  icon: Icon(Icons.clear, size: 20, color: appBarTextColor), 
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                  visualDensity: VisualDensity.compact,
+                                  onPressed: () { textEditingController.clear(); _filterItems(''); focusNode.unfocus(); }
+                                ),
+                              if (focusNode.hasFocus)
+                                IconButton(
+                                  icon: Icon(Icons.keyboard_arrow_up, size: 20, color: appBarTextColor.withValues(alpha: 0.6)), 
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                  visualDensity: VisualDensity.compact,
+                                  onPressed: () => focusNode.unfocus(),
+                                ),
+                              if (textEditingController.text.isNotEmpty || focusNode.hasFocus)
+                                const SizedBox(width: 4),
+                            ],
+                          ) 
+                        : null,
+                      filled: true,
+                      fillColor: (isDarkBg ? Colors.white : Colors.black).withValues(alpha: 0.1),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                    ),
                   ),
                 );
               },

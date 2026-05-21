@@ -55,6 +55,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Color get _textColor => Color(_appBgColor).computeLuminance() > 0.5 ? Colors.black87 : Colors.white;
   Color get _secondaryTextColor => Color(_appBgColor).computeLuminance() > 0.5 ? Colors.black54 : Colors.white70;
+  
+  Color get _accentColor {
+    final hsl = HSLColor.fromColor(Color(_appBgColor));
+    if (hsl.hue > 180 && hsl.hue < 260 && hsl.saturation > 0.2 && hsl.lightness > 0.2 && hsl.lightness < 0.8) {
+      return Colors.orange;
+    }
+    return Colors.blue;
+  }
 
   @override
   void initState() {
@@ -150,11 +158,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
         titleSpacing: 0,
         backgroundColor: Color(_appBgColor),
         foregroundColor: _textColor,
-        leading: Padding(
-          padding: const EdgeInsets.all(10.0),
-          child: Image.asset('assets/app_icon_0.png', fit: BoxFit.contain),
+        leading: Center(
+          child: SizedBox(
+            height: 40,
+            width: 40,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8.0),
+              child: Image.asset('assets/app_icon_0.png', fit: BoxFit.cover),
+            ),
+          ),
         ),
-        leadingWidth: 46,
+        leadingWidth: 48,
         title: Text('Настройки', style: TextStyle(color: _textColor)),
         automaticallyImplyLeading: false,
         actions: [
@@ -182,7 +196,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _buildNumberInput(title: 'Брой колони', controller: _gridColumnsController, min: 1, max: 10, onChanged: (val) => setState(() => _gridColumns = val)),
               _buildNumberInput(title: 'Брой редове текст', controller: _gridLinesController, min: 1, max: 20, onChanged: (val) => setState(() => _maxLinesGrid = val)),
               _buildSwitchInput(title: 'Компактен вид', value: _compactGridView, onChanged: (val) => setState(() => _compactGridView = val)),
-              _buildNumberInput(title: 'Таб стоп', controller: _gridWidthOffsetController, min: 0, max: 50, onChanged: (val) => setState(() => _gridWidthOffset = val)),
               const SizedBox(height: 10),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
               _buildSectionTitle('Бележки на основния екран'),
@@ -194,12 +207,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _buildNumberInput(title: 'Размер шрифт заглавие', controller: _formTitleSizeController, min: 14, max: 40, onChanged: (val) => setState(() => _fontSizeFormTitle = val.toDouble())),
               _buildNumberInput(title: 'Размер шрифт текст', controller: _formContentSizeController, min: 10, max: 35, onChanged: (val) => setState(() => _fontSizeFormContent = val.toDouble())),
               _buildNumberInput(title: 'Подравняване в колона', controller: _alignmentColumnController, min: 10, max: 100, onChanged: (val) => setState(() => _alignmentColumn = val)),
+              _buildNumberInput(title: 'Таб стоп', controller: _gridWidthOffsetController, min: 0, max: 50, onChanged: (val) => setState(() => _gridWidthOffset = val)),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
               _buildSectionTitle('Филтриране по етикети'),
-              _buildSwitchInput(
-                title: _filterMatchAll ? 'ВСИЧКИ избрани' : 'ПОНЕ ЕДИН от избраните',
-                value: _filterMatchAll,
-                onChanged: (val) => setState(() => _filterMatchAll = val),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment<bool>(value: false, label: Text('ПОНЕ ЕДИН от избраните', style: TextStyle(fontSize: 12))),
+                      ButtonSegment<bool>(value: true, label: Text('ВСИЧКИ избрани', style: TextStyle(fontSize: 12))),
+                    ],
+                    selected: {_filterMatchAll},
+                    onSelectionChanged: (Set<bool> newSelection) {
+                      setState(() => _filterMatchAll = newSelection.first);
+                    },
+                    style: SegmentedButton.styleFrom(
+                      selectedForegroundColor: Colors.white,
+                      selectedBackgroundColor: _accentColor,
+                      foregroundColor: _textColor,
+                    ),
+                  ),
+                ),
               ),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
               _buildSectionTitle('Потвърждение при изтриване'),
@@ -212,7 +242,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _buildSectionTitle('Споделяне'),
               _buildNumberInput(title: 'Дължина на заглавие', controller: _maxTitleLengthController, min: 10, max: 500, onChanged: (val) => setState(() => _maxTitleLength = val)),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
-              _buildSectionTitle('Облачна синхронизация'),
+              _buildSectionTitle('Синхронизация с Google Drive'),
               if (_user == null)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -220,8 +250,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     icon: const Icon(Icons.login),
                     label: const Text('Вход с Google & Синхронизация'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.black87,
+                      backgroundColor: _accentColor,
+                      foregroundColor: _textColor,
                       minimumSize: const Size(double.infinity, 45),
                     ),
                     onPressed: () async {
@@ -229,6 +259,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       final user = await SyncHelper().signInWithGoogle();
                       if (user != null && mounted) {
                         await SyncHelper().syncNotes();
+                        SyncHelper().syncPendingImages();
                         if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Успешен вход и синхронизация!')));
                       }
                       if (mounted) setState(() => _isSyncing = false);
@@ -256,10 +287,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: ElevatedButton.icon(
                         icon: _isSyncing ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.sync),
                         label: const Text('Синхронизирай сега'),
-                        style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 40)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _accentColor,
+                          foregroundColor: _textColor,
+                          minimumSize: const Size(double.infinity, 40),
+                        ),
                         onPressed: _isSyncing ? null : () async {
                           setState(() => _isSyncing = true);
                           final error = await SyncHelper().syncNotes();
+                          SyncHelper().syncPendingImages();
                           if (mounted) {
                             setState(() => _isSyncing = false);
                             if (context.mounted) {
@@ -277,8 +313,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       child: ElevatedButton.icon(
                         icon: _isSyncing ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.cloud_upload),
-                        label: const Text('Бекъп на снимките в Google Drive'),
-                        style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 40)),
+                        label: const Text('Запис на снимките'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _accentColor,
+                          foregroundColor: _textColor,
+                          minimumSize: const Size(double.infinity, 40),
+                        ),
                         onPressed: _isSyncing ? null : () async {
                           setState(() => _isSyncing = true);
                           final msg = await SyncHelper().backupImagesToGoogleDrive();
@@ -293,8 +333,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       child: ElevatedButton.icon(
                         icon: _isSyncing ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.cloud_download),
-                        label: const Text('Възстановяване на снимките от Drive'),
-                        style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 40)),
+                        label: const Text('Възстановяване на снимките'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _accentColor,
+                          foregroundColor: _textColor,
+                          minimumSize: const Size(double.infinity, 40),
+                        ),
                         onPressed: _isSyncing ? null : () async {
                           setState(() => _isSyncing = true);
                           final msg = await SyncHelper().restoreImagesFromGoogleDrive();
@@ -313,8 +357,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 child: ElevatedButton.icon(
                   icon: _isSyncing ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.archive_outlined),
-                  label: const Text('Запис на бележките в архив'),
-                  style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 40)),
+                  label: const Text('Запис на данните'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _accentColor,
+                    foregroundColor: _textColor,
+                    minimumSize: const Size(double.infinity, 40),
+                  ),
                   onPressed: _isSyncing ? null : () async {
                     setState(() => _isSyncing = true);
                     final msg = await SyncHelper().backupNotesLocally();
@@ -329,8 +377,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 child: ElevatedButton.icon(
                   icon: _isSyncing ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.unarchive_outlined),
-                  label: const Text('Зареждане на бележки от архив'),
-                  style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 40)),
+                  label: const Text('Зареждане на данните'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _accentColor,
+                    foregroundColor: _textColor,
+                    minimumSize: const Size(double.infinity, 40),
+                  ),
                   onPressed: _isSyncing ? null : () async {
                     final result = await FilePicker.platform.pickFiles(
                       type: FileType.custom,
@@ -382,7 +434,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               decoration: InputDecoration(
                 isDense: true, contentPadding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
                 enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: _secondaryTextColor.withValues(alpha: 0.3))),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Colors.blue)),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: _accentColor)),
               ),
               onChanged: (val) {
                 int? parsed = int.tryParse(val);
@@ -410,7 +462,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 scale: 0.8, // Намаляваме малко мащаба, за да пасне на компактния вид на полетата
                 child: Switch(
                   value: value,
-                  activeThumbColor: Colors.blue,
+                  activeThumbColor: _accentColor,
                   onChanged: onChanged,
                 ),
               ),
@@ -421,7 +473,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildSectionTitle(String title) => Padding(padding: const EdgeInsets.only(bottom: 8, top: 12), child: Text(title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(_appBgColor).computeLuminance() > 0.5 ? Colors.blueGrey : Colors.blueAccent)));
+  Widget _buildSectionTitle(String title) => Padding(padding: const EdgeInsets.only(bottom: 8, top: 12), child: Text(title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _textColor)));
 
   Widget _buildColorPicker({required int selectedColor, required Function(Color) onColorSelected}) {
     final List<Color> allColors = [..._availableColors, ..._customPalette];
@@ -436,9 +488,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               width: 38, height: 38,
               decoration: BoxDecoration(
                 color: color, shape: BoxShape.circle,
-                border: Border.all(color: isSelected ? Colors.blue : (_textColor.withValues(alpha: 0.2)), width: isSelected ? 2 : 1),
+                border: Border.all(color: isSelected ? _accentColor : (_textColor.withValues(alpha: 0.2)), width: isSelected ? 2 : 1),
               ),
-              child: isSelected ? const Icon(Icons.check, color: Colors.blue, size: 20) : null,
+              child: isSelected ? Icon(Icons.check, color: _accentColor, size: 20) : null,
             ),
           );
         }),
@@ -458,7 +510,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: Container(
             width: 38, height: 38,
             decoration: BoxDecoration(color: isSelectedColorBright(selectedColor) ? Colors.white : Colors.grey[800], shape: BoxShape.circle, boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 2)]),
-            child: const Icon(Icons.colorize, color: Colors.blue, size: 18),
+            child: Icon(Icons.colorize, color: _accentColor, size: 18),
           ),
         ),
       ],
