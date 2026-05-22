@@ -160,15 +160,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
         foregroundColor: _textColor,
         leading: Center(
           child: SizedBox(
-            height: 40,
-            width: 40,
+            height: 50,
+            width: 50,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(8.0),
               child: Image.asset('assets/app_icon_0.png', fit: BoxFit.cover),
             ),
           ),
         ),
-        leadingWidth: 48,
+        leadingWidth: 58,
         title: Text('Настройки', style: TextStyle(color: _textColor)),
         automaticallyImplyLeading: false,
         actions: [

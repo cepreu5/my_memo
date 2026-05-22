@@ -170,6 +170,8 @@ class _MainListScreenState extends State<MainListScreen> {
       _filterByUpdatedAt = prefs.getBool('filter_by_updated_at') ?? true;
       _gridWidthOffset = prefs.getInt('grid_width_offset') ?? 10;
       // _alignmentColumn = prefs.getInt('alignment_column') ?? 30;
+      _selectedFilterTags = prefs.getStringList('selected_filter_tags') ?? [];
+      _excludedFilterTags = prefs.getStringList('excluded_filter_tags') ?? [];
       final customList = prefs.getStringList('custom_palette') ?? [];
       _noteColors = [
         Colors.white, const Color(0xFF0A1931), const Color(0xFFFF5E00), 
@@ -180,6 +182,12 @@ class _MainListScreenState extends State<MainListScreen> {
         _noteColors.addAll(customList.map((s) => Color(int.parse(s))));
       }
     });
+  }
+
+  Future<void> _saveFilterTags() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('selected_filter_tags', _selectedFilterTags);
+    await prefs.setStringList('excluded_filter_tags', _excludedFilterTags);
   }
 
   @override
@@ -349,7 +357,8 @@ class _MainListScreenState extends State<MainListScreen> {
         }
       }
     }
-    setState(() { _allExistingTags = tagsSet; _selectedFilterTags.removeWhere((tag) => !tagsSet.contains(tag)); });
+    setState(() { _allExistingTags = tagsSet; _selectedFilterTags.removeWhere((tag) => !tagsSet.contains(tag)); _excludedFilterTags.removeWhere((tag) => !tagsSet.contains(tag)); });
+    _saveFilterTags();
   }
 
   // Филтрира и сортира бележките според търсен текст, избрани етикети, период, цвят или статус на задача.
@@ -644,6 +653,7 @@ class _MainListScreenState extends State<MainListScreen> {
                     _reverseOrder = false; _sortById = false; _selectedFilterTags.clear(); 
                   });
                   _filterItems(_searchController.text);
+                  _saveFilterTags();
                   navigator.pop();
                 }, child: Text("Изчисти всички", style: TextStyle(color: secondaryContrast))),
                 ElevatedButton(onPressed: () => Navigator.pop(ctx), child: const Text("Готово")),
@@ -802,6 +812,7 @@ class _MainListScreenState extends State<MainListScreen> {
                               _filterItems(_searchController.text);
                             });
                             setModalState(() {});
+                            _saveFilterTags();
                           },
                           child: FilterChip(
                             visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
@@ -822,6 +833,7 @@ class _MainListScreenState extends State<MainListScreen> {
                                 _filterItems(_searchController.text);
                               });
                               setModalState(() {});
+                              _saveFilterTags();
                             },
                             showCheckmark: false,
                             selectedColor: isExcluded ? Colors.grey[400] : Colors.yellow[700],
@@ -838,6 +850,7 @@ class _MainListScreenState extends State<MainListScreen> {
                   onPressed: () {
                     setState(() { _selectedFilterTags.clear(); _excludedFilterTags.clear(); _filterItems(_searchController.text); });
                     setModalState(() {});
+                    _saveFilterTags();
                   },
                   child: const Text('Изчисти', style: TextStyle(color: Colors.redAccent)),
                 ),
@@ -902,15 +915,15 @@ class _MainListScreenState extends State<MainListScreen> {
         foregroundColor: appBarTextColor,
         leading: Center(
           child: SizedBox(
-            height: 40,
-            width: 40,
+            height: 60,
+            width: 60,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(8.0),
               child: Image.asset('assets/app_icon_0.png', fit: BoxFit.cover),
             ),
           ),
         ),
-        leadingWidth: 48,
+        leadingWidth: 68,
         title: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8.0),
           child: LayoutBuilder(
@@ -1082,10 +1095,12 @@ class _MainListScreenState extends State<MainListScreen> {
                   onSelectionChanged: (newList) {
                     setState(() { _selectedFilterTags = newList; });
                     _filterItems(_searchController.text);
+                    _saveFilterTags();
                   },
                   onExcludedChanged: (newList) {
                     setState(() { _excludedFilterTags = newList; });
                     _filterItems(_searchController.text);
+                    _saveFilterTags();
                   },
                   onClearAll: () async {
                     final prefs = await SharedPreferences.getInstance();
@@ -1103,6 +1118,7 @@ class _MainListScreenState extends State<MainListScreen> {
                       _sortById = false;
                     });
                     _filterItems(_searchController.text);
+                    _saveFilterTags();
                   },
                 ),
                 Expanded(
@@ -1147,6 +1163,7 @@ class _MainListScreenState extends State<MainListScreen> {
                         _sortById = false;
                       });
                       _filterItems(_searchController.text);
+                      _saveFilterTags();
                     },
                     label: "Без филтри",
                   ),

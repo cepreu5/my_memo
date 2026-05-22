@@ -33,6 +33,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   final _contentController = MathHighlightController();
   final _tagController = TextEditingController(); 
   final _contentFocusNode = FocusNode();
+  final _titleFocusNode = FocusNode();
   String? _imagePath;
 
   DateTime? _creationTime;
@@ -90,6 +91,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     _contentController.dispose();
     _tagController.dispose();
     _contentFocusNode.dispose();
+    _titleFocusNode.dispose();
     super.dispose();
   }
 
@@ -111,7 +113,6 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       _titleController.text = widget.item!['title']?.toString() ?? "";
       _contentController.text = widget.item!['content']?.toString() ?? "";
       _imagePath = widget.item!['imagePath'];
-
       _isLocalCopy = widget.item!['isLocalCopy'] ?? 0;
       if (widget.item!['id'] == null && _imagePath != null && _isLocalCopy == 0) { _shouldCopyLocally = true; } else { _shouldCopyLocally = _isLocalCopy == 1; }
       if (widget.item!['tags'] != null && widget.item!['tags'].toString().isNotEmpty) { _selectedTags = widget.item!['tags'].toString().split(',').map((e) => e.trim()).toList(); }
@@ -121,7 +122,12 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       _isCompleted = widget.item!['isCompleted'] ?? 0;
       _isTask = _isCompleted == 1 || _isCompleted == 2;
       _isEditing = widget.item!['id'] == null || widget.startInEditMode;
-    } else { _isEditing = true; await _loadDefaultColor(); }
+      if (_isEditing) { _contentController.selection = const TextSelection.collapsed(offset: 0); }
+    } else {
+      _isEditing = true;
+      _contentController.selection = const TextSelection.collapsed(offset: 0);
+      await _loadDefaultColor();
+    }
     if (!_noteColors.contains(_selectedColor)) { _noteColors.add(_selectedColor); }
     if (mounted) setState(() {});
   }
@@ -560,8 +566,9 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
         String cleanLine = line.replaceFirst(anyPattern, '');
         if (type == 'bullet') {
           newLines.add('• $cleanLine');
-        } else if (type == 'number') newLines.add('${i + 1}. $cleanLine');
-        else if (type == 'check') {
+        } else if (type == 'number') {
+          newLines.add('${i + 1}. $cleanLine');
+        } else if (type == 'check') {
           newLines.add('☐ $cleanLine');
         }
       }
@@ -645,7 +652,6 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
           if (dotsIdx != -1) {
             noPrefix = noPrefix.substring(dotsIdx).replaceFirst(RegExp(r'^\.+\s*'), '');
           }
-          
           String matchStr = "";
           if (onlyMath.hasMatch(noPrefix)) { matchStr = noPrefix; } 
           else {
@@ -675,7 +681,13 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$expr $resStr (Копирано)"), duration: const Duration(seconds: 5)));
       _contentController.setHighlights(newHighlights, _textColor.withValues(alpha: 0.3), _textColor);
       if (!_isEditing) {
-        setState(() { _isEditing = true; });
+        setState(() {
+          _isEditing = true;
+          _contentController.selection = const TextSelection.collapsed(offset: 0);
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _contentFocusNode.requestFocus();
+        });
       }
     } catch (e) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Грешка при изчисление: $expr"))); }
   }
@@ -693,9 +705,13 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       String op = ops.removeLast();
       if (op == '+') {
         values.add(a + b);
-      } else if (op == '-') values.add(a - b);
-      else if (op == '*') values.add(a * b);
-      else if (op == '/') values.add(a / b);
+      } else if (op == '-') {
+        values.add(a - b);
+      } else if (op == '*') {
+        values.add(a * b);
+      } else if (op == '/') {
+        values.add(a / b);
+      }
     }
     for (var token in tokens) {
       if (RegExp(r'^\d').hasMatch(token)) { values.add(double.parse(token)); }
@@ -826,21 +842,19 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   }
 
   @override
-  // Основният метод за изграждане на интерфейса, включващ заглавие, редактор и инструменти.
   Widget build(BuildContext context) {
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onHorizontalDragEnd: (details) {
         if (_currentIndex == null) return;
-        if (details.primaryVelocity! > 0) { _switchToNote(_currentIndex! + 1); } // Надясно = следваща
-        else if (details.primaryVelocity! < 0) { _switchToNote(_currentIndex! - 1); } // Наляво = предишна
+        if (details.primaryVelocity! > 0) { _switchToNote(_currentIndex! + 1); }
+        else if (details.primaryVelocity! < 0) { _switchToNote(_currentIndex! - 1); }
       },
       onVerticalDragEnd: (details) {
         if (_currentIndex == null) return;
-        if (details.primaryVelocity! < 0) { _switchToNote(_currentIndex! + 1); } // Нагоре = следваща
-        else if (details.primaryVelocity! > 0) { _switchToNote(_currentIndex! - 1); } // Надолу = предишна
+        if (details.primaryVelocity! < 0) { _switchToNote(_currentIndex! + 1); }
+        else if (details.primaryVelocity! > 0) { _switchToNote(_currentIndex! - 1); }
       },
-      // Предотвратява случайно излизане от екрана при наличие на незапазени промени.
       child: PopScope(
       canPop: _canPop,
       onPopInvokedWithResult: (didPop, result) async {
@@ -888,7 +902,15 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
           actions: [
             if (!_isEditing) IconButton(icon: const Icon(Icons.calculate_outlined), color: _textColor, onPressed: _calculateNote, tooltip: 'Калкулатор'),
             if (widget.item?['id'] != null) IconButton(icon: const Icon(Icons.delete_outline), color: _textColor, onPressed: _deleteNote),
-            if (!_isEditing) IconButton(icon: const Icon(Icons.edit), color: _textColor, onPressed: () => setState(() => _isEditing = true))
+            if (!_isEditing) IconButton(icon: const Icon(Icons.edit), color: _textColor, onPressed: () {
+              setState(() {
+                _isEditing = true;
+                _contentController.selection = const TextSelection.collapsed(offset: 0);
+              });
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _contentFocusNode.requestFocus();
+              });
+            })
             else IconButton(icon: const Icon(Icons.save), color: _textColor, onPressed: _save),
           ],
         ),
@@ -896,13 +918,130 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
           children: [
             Column(
               children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    if (!_isEditing) {
+                      setState(() {
+                        _isEditing = true;
+                        _contentController.selection = const TextSelection.collapsed(offset: 0);
+                      });
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        _contentFocusNode.requestFocus();
+                      });
+                    }
+                  },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: _isEditing ? null : () {
+                          setState(() {
+                            _isEditing = true;
+                          });
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            _titleFocusNode.requestFocus();
+                          });
+                        },
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(color: _areaColor),
+                          child: _isEditing 
+                            ? Stack(
+                                alignment: Alignment.centerRight,
+                                children: [
+                                  TextField(
+                                    controller: _titleController, 
+                                    focusNode: _titleFocusNode,
+                                    maxLines: null, 
+                                    style: TextStyle(fontSize: _fontSizeTitle, fontWeight: FontWeight.bold, color: _textColor), 
+                                    decoration: InputDecoration(hintText: 'Заглавие', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor), contentPadding: EdgeInsets.zero),
+                                    contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
+                                  ),
+                                  if (_contentController.text.trim().isNotEmpty)
+                                    IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      onPressed: _moveFirstParagraphToTitle,
+                                      icon: Icon(Icons.arrow_upward, size: 16, color: _secondaryTextColor),
+                                      tooltip: 'Премести първия параграф към заглавието',
+                                    ),
+                                ],
+                              )
+                            : _titleController.text.isNotEmpty 
+                                ? Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(_titleController.text, style: TextStyle(fontSize: _fontSizeTitle, fontWeight: FontWeight.bold, color: _textColor)))
+                                : const SizedBox.shrink(),
+                        ),
+                      ),
+                      if (_selectedTags.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 16.0),
+                          child: Wrap(spacing: 6, runSpacing: 0, children: _selectedTags.map((tag) => Chip(
+                            label: Text(tag, style: const TextStyle(fontSize: 12, color: Colors.black)),
+                            backgroundColor: Colors.white,
+                            side: const BorderSide(color: Colors.black),
+                            padding: const EdgeInsets.only(left: 4.0),
+                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            onDeleted: _isEditing ? () => setState(() => _selectedTags.remove(tag)) : null,
+                            deleteIconColor: Colors.black,
+                          )).toList()),
+                        ),
+                      if (_isEditing)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          width: double.infinity,
+                          decoration: BoxDecoration(color: _areaColor),
+                          child: Container(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            margin: const EdgeInsets.only(bottom: 4),
+                            decoration: BoxDecoration(border: Border(bottom: BorderSide(color: _textColor.withValues(alpha: 0.1), width: 1.0))),
+                            child: Row(
+                              children: [
+                                IconButton(icon: const Icon(Icons.first_page), onPressed: _moveToLineStart, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Начало на ред'),
+                                const Spacer(),
+                                GestureDetector(
+                                  onTap: () => setState(() => _forceTwoDecimals = !_forceTwoDecimals),
+                                  child: Tooltip(message: 'Суми с 2 знака', child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(_forceTwoDecimals ? Icons.check : Icons.close, size: 12, color: _secondaryTextColor),
+                                      Text('.00', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'monospace', color: _secondaryTextColor)),
+                                    ],
+                                  )),
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton(icon: const Icon(Icons.keyboard_tab), onPressed: _moveToLineEndOrTab, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Край на ред / Таб'),
+                                const SizedBox(width: 8),
+                                IconButton(icon: const Icon(Icons.control_point_duplicate), onPressed: _duplicateCurrentLine, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Дублирай реда'),
+                                const SizedBox(width: 8),
+                                IconButton(icon: const Icon(Icons.delete_sweep_outlined), onPressed: _deleteCurrentLine, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Изтрий реда'),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
                 Expanded(
                   child: SingleChildScrollView(
                     padding: EdgeInsets.zero,
                     child: SelectionArea(
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
-                        onTap: () { if (!_isEditing) setState(() => _isEditing = true); _contentFocusNode.requestFocus(); },
+                        onTap: () {
+                          if (!_isEditing) {
+                            setState(() {
+                              _isEditing = true;
+                              _contentController.selection = const TextSelection.collapsed(offset: 0);
+                            });
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              _contentFocusNode.requestFocus();
+                            });
+                          } else {
+                            _contentFocusNode.requestFocus();
+                          }
+                        },
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -932,96 +1071,21 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                   ],
                                 ),
                               ),
-                            const SizedBox(height: 8),
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(color: _areaColor),
-                              child: _isEditing 
-                                ? Stack(
-                                    alignment: Alignment.centerRight,
-                                    children: [
-                                      TextField(
-                                        controller: _titleController, 
-                                        maxLines: null, 
-                                        style: TextStyle(fontSize: _fontSizeTitle, fontWeight: FontWeight.bold, color: _textColor), 
-                                        decoration: InputDecoration(hintText: 'Заглавие', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor), contentPadding: EdgeInsets.zero),
-                                        contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
-                                      ),
-                                      if (_contentController.text.trim().isNotEmpty)
-                                        IconButton(
-                                          visualDensity: VisualDensity.compact,
-                                          onPressed: _moveFirstParagraphToTitle,
-                                          icon: Icon(Icons.arrow_upward, size: 16, color: _secondaryTextColor),
-                                          tooltip: 'Премести първия параграф към заглавието',
-                                        ),
-                                    ],
-                                  )
-                                : _titleController.text.isNotEmpty 
-                                    ? Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(_titleController.text, style: TextStyle(fontSize: _fontSizeTitle, fontWeight: FontWeight.bold, color: _textColor)))
-                                    : const SizedBox.shrink(),
-                            ),
-                            if (_selectedTags.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 4.0),
-                                child: Wrap(spacing: 6, runSpacing: 0, children: _selectedTags.map((tag) => Chip(
-                                  label: Text(tag, style: const TextStyle(fontSize: 12, color: Colors.black)),
-                                  backgroundColor: Colors.white,
-                                  side: const BorderSide(color: Colors.black),
-                                  // padding: EdgeInsets.zero, 
-                                  padding: const EdgeInsets.only(left: 4.0),
-                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  onDeleted: _isEditing ? () => setState(() => _selectedTags.remove(tag)) : null,
-                                  deleteIconColor: Colors.black,
-                                )).toList()),
-                              ),
                             const SizedBox(height: 4),
-                            Container( // toolbar
+                            Container(
                                padding: EdgeInsets.fromLTRB(16, _isEditing ? 4 : 16, 16, 16),
                                width: double.infinity,
                                decoration: BoxDecoration(color: _areaColor),
                                child: _isEditing 
-                                 ? Column(
-                                     crossAxisAlignment: CrossAxisAlignment.start,
-                                     children: [
-                                       Container(
-                                         padding: const EdgeInsets.only(bottom: 4),
-                                         margin: const EdgeInsets.only(bottom: 4),
-                                         decoration: BoxDecoration(border: Border(bottom: BorderSide(color: _textColor.withValues(alpha: 0.1), width: 1.0))),
-                                         child: Row(
-                                           children: [
-                                             IconButton(icon: const Icon(Icons.first_page), onPressed: _moveToLineStart, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Начало на ред'),
-                                             const Spacer(),
-                                             GestureDetector(
-                                               onTap: () => setState(() => _forceTwoDecimals = !_forceTwoDecimals),
-                                               child: Tooltip(message: 'Суми с 2 знака', child: Row(
-                                                 mainAxisSize: MainAxisSize.min,
-                                                 children: [
-                                                   Icon(_forceTwoDecimals ? Icons.check : Icons.close, size: 12, color: _secondaryTextColor),
-                                                   Text('.00', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'monospace', color: _secondaryTextColor)),
-                                                 ],
-                                               )),
-                                             ),
-                                             const SizedBox(width: 8),
-                                             IconButton(icon: const Icon(Icons.keyboard_tab), onPressed: _moveToLineEndOrTab, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Край на ред / Таб'),
-                                             const SizedBox(width: 8),
-                                             IconButton(icon: const Icon(Icons.control_point_duplicate), onPressed: _duplicateCurrentLine, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Дублирай реда'),
-                                             const SizedBox(width: 8),
-                                             IconButton(icon: const Icon(Icons.delete_sweep_outlined), onPressed: _deleteCurrentLine, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Изтрий реда'),
-                                           ],
-                                         ),
-                                       ),
-                                       TextField(
-                                         controller: _contentController, 
-                                         focusNode: _contentFocusNode, 
-                                         maxLines: null, 
-                                         style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.2), 
-                                         decoration: InputDecoration(hintText: 'Съдържание...', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor), contentPadding: EdgeInsets.zero),
-                                         onChanged: _onContentChanged,
-                                         onSubmitted: (v) => _save(),
-                                         contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
-                                       ),
-                                     ],
+                                 ? TextField(
+                                     controller: _contentController, 
+                                     focusNode: _contentFocusNode, 
+                                     maxLines: null, 
+                                     style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.2), 
+                                     decoration: InputDecoration(hintText: 'Съдържание...', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor), contentPadding: EdgeInsets.zero),
+                                     onChanged: _onContentChanged,
+                                     onSubmitted: (v) => _save(),
+                                     contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
                                    )
                                  : Column(
                                      crossAxisAlignment: CrossAxisAlignment.start,
@@ -1077,7 +1141,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                             ),
                             if (_isEditing && _imagePath != null && _isLocalCopy == 0)
                               Padding(
-                                padding: const EdgeInsets.only(top: 10),
+                                padding: const EdgeInsets.only(top: 10, left: 16, right: 16),
                                 child: SwitchListTile(
                                   title: Text("Копирай локално", style: TextStyle(fontSize: 14, color: _textColor)),
                                   subtitle: Text("Запазва снимката, дори да бъде изтрита от галерията", style: TextStyle(fontSize: 11, color: _secondaryTextColor)),
@@ -1110,7 +1174,15 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
               FlyAction(icon: Icons.arrow_back, onTap: () => Navigator.maybePop(context), label: "Назад"),
               if (_isEditing) FlyAction(icon: Icons.save, onTap: _save, label: "Запази"),
               if (!_isEditing) FlyAction(icon: Icons.calculate_outlined, onTap: _calculateNote, label: "Калкулатор"),
-              if (!_isEditing) FlyAction(icon: Icons.edit, onTap: () => setState(() => _isEditing = true), label: "Редактирай"),
+              if (!_isEditing) FlyAction(icon: Icons.edit, onTap: () {
+                setState(() {
+                  _isEditing = true;
+                  _contentController.selection = const TextSelection.collapsed(offset: 0);
+                });
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _contentFocusNode.requestFocus();
+                });
+              }, label: "Редактирай"),
             ]),
           ],
         ),
