@@ -228,11 +228,36 @@ class _MainListScreenState extends State<MainListScreen> {
     return match?.group(1);
   }
 
+  String? _extractFacebookVideoUrl(String text) {
+    final regExp = RegExp(r'(https?:\/\/(?:www\.)?(?:facebook\.com|fb\.watch)\/[^\s]+)', caseSensitive: false);
+    final match = regExp.firstMatch(text);
+    return match?.group(0);
+  }
+
+  Future<String?> _extractFacebookVideoId(String url) async {
+    if (url.contains('fb.watch')) {
+      try {
+        final client = http.Client();
+        final request = http.Request('GET', Uri.parse(url))..followRedirects = false;
+        final response = await client.send(request);
+        final finalUrl = response.headers['location'];
+        if (finalUrl != null) return _extractFacebookVideoId(finalUrl);
+      } catch (e) {
+        debugPrint("Грешка при fb.watch: $e");
+        return null;
+      }
+    }
+    final regExp = RegExp(r'(?:videos|v|video\.php\?v=)\/(\d{10,})', caseSensitive: false);
+    final match = regExp.firstMatch(url);
+    return match?.group(1);
+  }
+
   // Анализира споделен текст за линкове или YouTube ID и подготвя създаването на нова бележка.
   Future<void> _handleSharedText(String text) async {
     if (text.isEmpty) return;
     String? youtubeId = _extractYoutubeId(text);
     String? tiktokUrl = _extractTiktokUrl(text);
+    String? facebookUrl = _extractFacebookVideoUrl(text);
     String? thumbPath;
     String title = '📝 ';
     if (youtubeId != null) {
@@ -263,6 +288,20 @@ class _MainListScreenState extends State<MainListScreen> {
           }
         }
       } catch (e) { debugPrint("Грешка при TikTok thumbnail: $e"); }
+    } else if (facebookUrl != null) {
+      title = '🎬 ';
+      try {
+        final videoId = await _extractFacebookVideoId(facebookUrl);
+        if (videoId != null) {
+          final thumbUrl = 'https://graph.facebook.com/$videoId/picture';
+          final response = await http.get(Uri.parse(thumbUrl));
+          if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+            final appDir = await getApplicationDocumentsDirectory();
+            thumbPath = p.join(appDir.path, 'fb_thumb_$videoId.jpg');
+            await File(thumbPath).writeAsBytes(response.bodyBytes);
+          }
+        }
+      } catch (e) { debugPrint("Грешка при Facebook thumbnail: $e"); }
     } else if (text.contains('http://') || text.contains('https://') || text.contains('www.')) {
       title = '🔗 ';
     }
