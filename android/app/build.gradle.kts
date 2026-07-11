@@ -54,3 +54,8 @@ tasks.withType<JavaCompile>().configureEach {
     sourceCompatibility = "17"
     targetCompatibility = "17"
 }
+
+// Това е правилната корекция:
+// Изрично казваме на Gradle да използва главната 'build' папка на Flutter проекта,
+// вместо стандартната 'android/app/build'.
+layout.buildDirectory.set(project.rootProject.file("build/app"))

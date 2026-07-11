@@ -19,6 +19,7 @@ import 'package:flutter_native_splash/flutter_native_splash.dart';
 
 // Входна точка на приложението, която инициализира Flutter средата и зарежда стартовия екран.
 void main() {
+  debugPrint("APP_START: main() function has been called.");
   final binding = WidgetsFlutterBinding.ensureInitialized();
   FlutterNativeSplash.preserve(widgetsBinding: binding);
   runApp(const BusinessOrganizerApp());
@@ -103,25 +104,20 @@ class _MainListScreenState extends State<MainListScreen> {
 
   // Инициализира системните компоненти, зарежда настройките и слуша за споделено съдържание от други приложения.
   Future<void> _initializeApp() async {
-    // 1. Абонираме се за стрийм-а ВЕДНАГА, за да не изпуснем събитие, докато се изпълняват другите await-ове
+    // 1. Абонираме се за споделяния, докато приложението е активно.
     _intentDataStreamSubscription = ReceiveSharingIntent.instance.getMediaStream().listen((value) {
       if (value.isNotEmpty) _handleSharedMedia(value);
     }, onError: (err) => debugPrint("Грешка при споделяне: $err"));
 
     try {
+      // 2. Обработваме споделяне, ако приложението е стартирано от него.
+      final initialMedia = await ReceiveSharingIntent.instance.getInitialMedia();
+      if (initialMedia.isNotEmpty) await _handleSharedMedia(initialMedia);
+
       await CrossPlatformVideoThumbnails.initialize();
       await _loadSettings();
       await _refreshItems();
-      
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        // 2. Малко изчакване за началното споделяне, за да е сигурно, че Navigator-ът е готов
-        await Future.delayed(const Duration(milliseconds: 500));
-        final initialMedia = await ReceiveSharingIntent.instance.getInitialMedia();
-        if (initialMedia.isNotEmpty) {
-          await _handleSharedMedia(initialMedia);
-        }
-        FlutterNativeSplash.remove();
-      });
+      FlutterNativeSplash.remove();
     } catch (e) {
       debugPrint("Грешка инициализация: $e");
       FlutterNativeSplash.remove();
@@ -207,12 +203,26 @@ class _MainListScreenState extends State<MainListScreen> {
   // Обработва входящи мултимедийни файлове (снимки, видео) при споделяне към приложението.
   Future<void> _handleSharedMedia(List<SharedMediaFile> media) async {
     if (!media.isNotEmpty) return;
+
+    // --- ДИАГНОСТИКА ---
+    // Събираме информация, за да я покажем в бележката.
     final sharedFile = media.first;
-    if (sharedFile.type == SharedMediaType.text || sharedFile.type == SharedMediaType.url) { await _handleSharedText(sharedFile.path); } 
-    else if (sharedFile.type == SharedMediaType.video) {
-      _openNoteForm(initialData: { 'title': '🎬 ', 'content': sharedFile.path, 'imagePath': sharedFile.path, 'needsThumbnail': true, 'id': null, 'color': null, 'isCompleted': 0, 'tags': null });
+    final diagLog = StringBuffer();
+    diagLog.writeln("--- DEBUG INFO ---");
+    diagLog.writeln("Received Path: ${sharedFile.path}");
+    diagLog.writeln("Received Type: ${sharedFile.type}");
+
+    final isUrl = RegExp(r'^(https?:\/\/|www\.)').hasMatch(sharedFile.path);
+    diagLog.writeln("Is URL? $isUrl");
+
+    if (sharedFile.type == SharedMediaType.text || sharedFile.type == SharedMediaType.url || (sharedFile.type == SharedMediaType.video && isUrl)) { 
+      await _handleSharedText(sharedFile.path, diagLog); 
+    } else if (sharedFile.type == SharedMediaType.video && !isUrl) {
+      diagLog.writeln("Handling as a video file.");
+      _openNoteForm(initialData: { 'title': '🎬 ', 'content': "${sharedFile.path}\n\n${diagLog.toString()}", 'imagePath': sharedFile.path, 'needsThumbnail': true, 'id': null, 'color': null, 'isCompleted': 0, 'tags': null });
     } else {
-      _openNoteForm(initialData: { 'imagePath': sharedFile.path, 'title': '📷 ', 'content': '', 'id': null, 'color': null, 'isCompleted': 0, 'tags': null });
+      diagLog.writeln("Handling as an image file.");
+      _openNoteForm(initialData: { 'imagePath': sharedFile.path, 'title': '📷 ', 'content': diagLog.toString(), 'id': null, 'color': null, 'isCompleted': 0, 'tags': null });
     }
   }
 
@@ -234,27 +244,31 @@ class _MainListScreenState extends State<MainListScreen> {
     return match?.group(0);
   }
 
-  Future<String?> _extractFacebookVideoId(String url) async {
-    if (url.contains('fb.watch')) {
+  Future<String> _resolveFacebookRedirect(String url, StringBuffer diagLog) async {
+    diagLog.writeln("Extracting FB ID from: $url");
+    if (url.contains('fb.watch') || url.contains('/share/v/')) {
       try {
         final client = http.Client();
-        final request = http.Request('GET', Uri.parse(url))..followRedirects = false;
-        final response = await client.send(request);
-        final finalUrl = response.headers['location'];
-        if (finalUrl != null) return _extractFacebookVideoId(finalUrl);
+        final safeUrl = url.startsWith('http') ? url : 'https://$url';
+        diagLog.writeln("Following redirect for: $safeUrl");
+        final response = await client.head(Uri.parse(safeUrl)); // Use HEAD to get headers without body
+        if (response.statusCode >= 300 && response.statusCode < 400 && response.headers['location'] != null) {
+          final finalUrl = response.headers['location']!;
+          diagLog.writeln("Redirect Status: ${response.statusCode}, Location: $finalUrl");
+          return finalUrl;
+        }
       } catch (e) {
-        debugPrint("Грешка при fb.watch: $e");
-        return null;
+        diagLog.writeln("Redirect ERROR: $e");
       }
     }
-    final regExp = RegExp(r'(?:videos|v|video\.php\?v=)\/(\d{10,})', caseSensitive: false);
-    final match = regExp.firstMatch(url);
-    return match?.group(1);
+    return url; // Return original URL if not a redirect
   }
 
   // Анализира споделен текст за линкове или YouTube ID и подготвя създаването на нова бележка.
-  Future<void> _handleSharedText(String text) async {
+  Future<void> _handleSharedText(String text, StringBuffer diagLog) async {
     if (text.isEmpty) return;
+    diagLog.writeln("Handling as text...");
+
     String? youtubeId = _extractYoutubeId(text);
     String? tiktokUrl = _extractTiktokUrl(text);
     String? facebookUrl = _extractFacebookVideoUrl(text);
@@ -289,23 +303,47 @@ class _MainListScreenState extends State<MainListScreen> {
         }
       } catch (e) { debugPrint("Грешка при TikTok thumbnail: $e"); }
     } else if (facebookUrl != null) {
+      diagLog.writeln("Found Facebook URL: $facebookUrl");
       title = '🎬 ';
       try {
-        final videoId = await _extractFacebookVideoId(facebookUrl);
-        if (videoId != null) {
-          final thumbUrl = 'https://graph.facebook.com/$videoId/picture';
-          final response = await http.get(Uri.parse(thumbUrl));
-          if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
-            final appDir = await getApplicationDocumentsDirectory();
-            thumbPath = p.join(appDir.path, 'fb_thumb_$videoId.jpg');
-            await File(thumbPath).writeAsBytes(response.bodyBytes);
+        // 1. Проследяваме пренасочването, за да получим финалния URL
+        final resolvedUrl = await _resolveFacebookRedirect(facebookUrl, diagLog);
+        
+        // 2. Изпращаме GET заявка с User-Agent на WhatsApp, за да получим Open Graph таговете
+        diagLog.writeln("Scraping Open Graph tags from: $resolvedUrl");
+        final response = await http.get(
+          Uri.parse(resolvedUrl),
+          headers: {'User-Agent': 'WhatsApp/2.21.24.22 A'},
+        );
+        diagLog.writeln("Scraping response status: ${response.statusCode}");
+
+        if (response.statusCode == 200) {
+          final html = response.body;
+          final regex = RegExp(r'property="og:image"\s+content="([^"]+)"');
+          final match = regex.firstMatch(html);
+          String? imageUrl = match?.group(1)?.replaceAll('&amp;', '&');
+          diagLog.writeln("Found thumbnail via Open Graph: $imageUrl");
+
+          if (imageUrl != null) {
+            final thumbResp = await http.get(Uri.parse(imageUrl));
+            diagLog.writeln("Thumbnail download status: ${thumbResp.statusCode}");
+            if (thumbResp.statusCode == 200 && thumbResp.bodyBytes.isNotEmpty) {
+              final appDir = await getApplicationDocumentsDirectory();
+              final fileName = 'fb_thumb_${DateTime.now().millisecondsSinceEpoch}.jpg';
+              thumbPath = p.join(appDir.path, fileName);
+              await File(thumbPath).writeAsBytes(thumbResp.bodyBytes);
+              diagLog.writeln("Thumbnail saved to: $thumbPath");
+            }
           }
         }
-      } catch (e) { debugPrint("Грешка при Facebook thumbnail: $e"); }
+      } catch (e) { 
+        diagLog.writeln("FB Thumbnail ERROR: $e");
+      }
     } else if (text.contains('http://') || text.contains('https://') || text.contains('www.')) {
       title = '🔗 ';
     }
-    String finalContent = text;
+
+    String finalContent;
     String finalTitle = title;
     final urlRegExp = RegExp(r'(https?:\/\/[^\s]+|www\.[^\s]+)');
     final match = urlRegExp.firstMatch(text);
@@ -315,7 +353,7 @@ class _MainListScreenState extends State<MainListScreen> {
       String afterUrl = text.substring(match.end).trim();
       
       if (beforeUrl.isEmpty && afterUrl.isEmpty) {
-        finalContent = urlPart;
+        finalContent = "$urlPart\n\n${diagLog.toString()}";
       } else if (beforeUrl.isNotEmpty && afterUrl.isEmpty) {
         if (beforeUrl.length > _maxTitleLength) {
           finalTitle = title;
@@ -323,26 +361,27 @@ class _MainListScreenState extends State<MainListScreen> {
         } else {
           finalTitle = '$title$beforeUrl';
           finalContent = urlPart;
+          finalContent += "\n\n${diagLog.toString()}";
         }
       } else if (beforeUrl.isEmpty && afterUrl.isNotEmpty) {
-        finalContent = '$urlPart\n$afterUrl';
+        finalContent = '$urlPart\n$afterUrl\n\n${diagLog.toString()}';
       } else {
         // Both before and after are not empty
         if (beforeUrl.length > _maxTitleLength) {
           finalTitle = title;
-          finalContent = '$beforeUrl\n$urlPart\n$afterUrl';
+          finalContent = '$beforeUrl\n$urlPart\n$afterUrl\n\n${diagLog.toString()}';
         } else {
           finalTitle = '$title$beforeUrl';
-          finalContent = '$urlPart\n$afterUrl';
+          finalContent = '$urlPart\n$afterUrl\n\n${diagLog.toString()}';
         }
       }
     } else {
       if (text.length > _maxTitleLength) {
         finalTitle = title;
-        finalContent = text;
+        finalContent = "$text\n\n${diagLog.toString()}";
       } else {
         finalTitle = '$title$text';
-        finalContent = '';
+        finalContent = diagLog.toString();
       }
     }
     _openNoteForm(initialData: { 'content': finalContent, 'title': finalTitle, 'imagePath': thumbPath, 'id': null, 'color': null, 'isCompleted': 0, 'tags': null });
