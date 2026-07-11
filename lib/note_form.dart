@@ -753,6 +753,10 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     final match = regExp.firstMatch(text);
     return match?.group(1);
   }
+
+  void _handleImageTap() {
+    _editExistingImage();
+  }
   
   // Премахва бележката от базата данни и изтрива свързаните с нея файлове след потвърждение.
   Future<void> _deleteNote() async {
@@ -875,7 +879,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                           children: [
                             if (_imagePath != null)
                               GestureDetector(
-                                onTap: (_isEditing && _extractYoutubeId(_contentController.text) == null && _extractTiktokUrl(_contentController.text) == null) ? _editExistingImage : _openFullScreenImage,
+                                onTap: _isEditing ? _handleImageTap : _openFullScreenImage,
                                 child: Stack(
                                   children: [
                                     Container(
@@ -887,7 +891,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                         child: Image.file(File(_imagePath!), fit: BoxFit.contain, errorBuilder: (c, e, s) => const Icon(Icons.broken_image, size: 40, color: Colors.grey)),
                                       ),
                                     ),
-                                    if (_isEditing && _imagePath != null)
+                                    if (_isEditing)
                                       const Positioned(right: 8, bottom: 8, child: CircleAvatar(radius: 18, backgroundColor: Colors.black54, child: Icon(Icons.crop, color: Colors.white, size: 20))),
                                   ],
                                 ),
@@ -1259,7 +1263,3 @@ class FullScreenImage extends StatelessWidget {
     );
   }
 }
-
-
-
-
