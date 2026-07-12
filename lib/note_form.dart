@@ -196,7 +196,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                             padding: const EdgeInsets.only(right: 4.0),
                             labelPadding: const EdgeInsets.symmetric(horizontal: 4.0),
                             label: Text(tag, style: const TextStyle(fontSize: 10, color: Colors.black)),
-                            selected: isSelected,
+                            selected: _selectedTags.contains(tag),
                             onSelected: (val) {
                               setState(() { val ? _selectedTags.add(tag) : _selectedTags.remove(tag); });
                               setModalState(() {});
@@ -327,6 +327,26 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
         _shouldCopyLocally = true;
       });
     }
+  }
+
+  // Премахва изображението от бележката и го изтрива от паметта, ако е локално копие и не се ползва другаде.
+  Future<void> _removeImage() async {
+    if (_imagePath == null) return;
+
+    // Проверяваме дали файлът е локално копие и дали не се използва от друга бележка.
+    if (_isLocalCopy == 1) {
+      bool isUsed = await dbHelper.isImagePathUsed(_imagePath!, widget.item?['id']);
+      if (!isUsed) {
+        try {
+          final file = File(_imagePath!);
+          if (await file.exists()) await file.delete();
+        } catch (e) { debugPrint("Грешка при изтриване на файл: $e"); }
+      }
+    }
+
+    setState(() {
+      _imagePath = null;
+    });
   }
 
   // Копира избраното изображение в защитената директория на приложението за постоянно съхранение.
@@ -758,6 +778,21 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     _editExistingImage();
   }
   
+  // Помощен метод за създаване на бутоните за редакция върху изображението.
+  Widget _buildEditButton(IconData icon, VoidCallback onPressed, String tooltip) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Tooltip(
+        message: tooltip,
+        child: CircleAvatar(
+          radius: 18,
+          backgroundColor: Colors.black54,
+          child: Icon(icon, color: Colors.white, size: 20),
+        ),
+      ),
+    );
+  }
+
   // Премахва бележката от базата данни и изтрива свързаните с нея файлове след потвърждение.
   Future<void> _deleteNote() async {
     if (widget.item?['id'] == null) return;
@@ -879,7 +914,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                           children: [
                             if (_imagePath != null)
                               GestureDetector(
-                                onTap: _isEditing ? _handleImageTap : _openFullScreenImage,
+                                onTap: _openFullScreenImage, // Основното докосване отваря на цял екран
                                 child: Stack(
                                   children: [
                                     Container(
@@ -891,8 +926,18 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                         child: Image.file(File(_imagePath!), fit: BoxFit.contain, errorBuilder: (c, e, s) => const Icon(Icons.broken_image, size: 40, color: Colors.grey)),
                                       ),
                                     ),
-                                    if (_isEditing)
-                                      const Positioned(right: 8, bottom: 8, child: CircleAvatar(radius: 18, backgroundColor: Colors.black54, child: Icon(Icons.crop, color: Colors.white, size: 20))),
+                                    if (_isEditing) // Показваме бутоните само в режим на редактиране
+                                      Positioned(
+                                        right: 8,
+                                        bottom: 8,
+                                        child: Row(
+                                          children: [
+                                            _buildEditButton(Icons.delete_outline, _removeImage, 'Изтрий снимката'),
+                                            const SizedBox(width: 8),
+                                            _buildEditButton(Icons.crop, _editExistingImage, 'Изрежи снимката'),
+                                          ],
+                                        ),
+                                      ),
                                   ],
                                 ),
                               ),
@@ -901,23 +946,34 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                               width: double.infinity,
                               padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(color: _areaColor),
-                              child: _isEditing 
-                                ? Stack(
-                                    alignment: Alignment.centerRight,
+                              child: _isEditing
+                                ? Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
                                     children: [
-                                      TextField(
-                                        controller: _titleController, 
-                                        maxLines: null, 
-                                        style: TextStyle(fontSize: _fontSizeTitle, fontWeight: FontWeight.bold, color: _textColor), 
-                                        decoration: InputDecoration(hintText: 'Заглавие', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor), contentPadding: EdgeInsets.zero),
-                                        contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
-                                      ),
                                       if (_contentController.text.trim().isNotEmpty)
                                         IconButton(
                                           visualDensity: VisualDensity.compact,
+                                          padding: const EdgeInsets.only(right: 8.0),
                                           onPressed: _moveFirstParagraphToTitle,
-                                          icon: Icon(Icons.arrow_upward, size: 16, color: _secondaryTextColor),
+                                          icon: Icon(Icons.arrow_upward, size: 18, color: _secondaryTextColor),
                                           tooltip: 'Премести първия параграф към заглавието',
+                                        ),
+                                      Expanded(
+                                        child: TextField(
+                                          controller: _titleController,
+                                          maxLines: null,
+                                          style: TextStyle(fontSize: _fontSizeTitle, fontWeight: FontWeight.bold, color: _textColor),
+                                          decoration: InputDecoration(hintText: 'Заглавие', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor), contentPadding: EdgeInsets.zero, isDense: true),
+                                          contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
+                                        ),
+                                      ),
+                                      if (_titleController.text.isNotEmpty)
+                                        IconButton(
+                                          visualDensity: VisualDensity.compact,
+                                          padding: const EdgeInsets.only(left: 8.0),
+                                          onPressed: () => _titleController.clear(),
+                                          icon: Icon(Icons.close, size: 18, color: _secondaryTextColor),
+                                          tooltip: 'Изчисти заглавието',
                                         ),
                                     ],
                                   )
