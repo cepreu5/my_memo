@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path/path.dart' as p;
+import 'dart:io';
 import 'color_picker_helper.dart';
 import 'db_viewer.dart';
 import 'fly_menu.dart';
@@ -54,6 +56,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String? _googleAccountEmail;
   bool _isBackingUp = false;
   bool _isRestoring = false;
+  bool _isSavingLocal = false;
+  bool _isRestoringLocal = false;
 
   Color get _textColor => Color(_appBgColor).computeLuminance() > 0.5 ? Colors.black87 : Colors.white;
   Color get _secondaryTextColor => Color(_appBgColor).computeLuminance() > 0.5 ? Colors.black54 : Colors.white70;
@@ -125,6 +129,126 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _performLocalBackup() async {
+    if (!mounted) return;
+    setState(() => _isSavingLocal = true);
+    try {
+      final path = await _driveHelper.saveBackupLocally();
+      if (mounted) {
+        if (path != null) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: const Text('Архивът е записан в папка\nИзтегляния/my_memo_backups', style: TextStyle(fontSize: 12)),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 5),
+          ));
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Грешка при записване'), backgroundColor: Colors.red));
+        }
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Грешка: $e'), backgroundColor: Colors.red));
+    } finally {
+      if (mounted) setState(() => _isSavingLocal = false);
+    }
+  }
+
+  Future<void> _performLocalRestore() async {
+    if (!mounted) return;
+    setState(() => _isRestoringLocal = true);
+    try {
+      final localBackups = _driveHelper.listLocalBackups();
+      if (!mounted) return;
+      if (localBackups.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Няма намерени локални архиви в Downloads'), backgroundColor: Colors.orange));
+        setState(() => _isRestoringLocal = false);
+        return;
+      }
+      final selectedPath = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: Color(_appBgColor),
+          title: Text('Избор на архив', style: TextStyle(color: _textColor)),
+          content: StatefulBuilder(
+            builder: (ctx, setDialogState) => SizedBox(
+              width: double.maxFinite,
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: localBackups.length,
+                itemBuilder: (ctx, index) {
+                  final file = localBackups[index];
+                  final name = p.basename(file.path);
+                  final dateStr = name.replaceAll('my_memo_', '').replaceAll('.zip', '');
+                  return ListTile(
+                    title: Text(name, style: TextStyle(color: _textColor, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    subtitle: Text(dateStr, style: TextStyle(color: _secondaryTextColor, fontSize: 11)),
+                    dense: true,
+                    onTap: () => Navigator.pop(ctx, file.path),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
+                      onPressed: () async {
+                        final del = await showDialog<bool>(
+                          context: context,
+                          builder: (d) => AlertDialog(
+                            backgroundColor: Color(_appBgColor),
+                            title: Text('Изтриване', style: TextStyle(color: _textColor)),
+                            content: Text('Изтрий $name?', style: TextStyle(color: _secondaryTextColor)),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(d, false), child: Text('Отказ', style: TextStyle(color: _secondaryTextColor))),
+                              TextButton(onPressed: () => Navigator.pop(d, true), child: const Text('Изтрий', style: TextStyle(color: Colors.red))),
+                            ],
+                          ),
+                        ) ?? false;
+                        if (del) {
+                          try { await file.delete(); } catch (e) {}
+                          setDialogState(() => localBackups.removeAt(index));
+                        }
+                      },
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Отказ', style: TextStyle(color: _secondaryTextColor))),
+          ],
+        ),
+      );
+      if (selectedPath == null) {
+        setState(() => _isRestoringLocal = false);
+        return;
+      }
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: Color(_appBgColor),
+          title: Text('Възстановяване', style: TextStyle(color: _textColor)),
+          content: Text('Това ще замести всички текущи бележки с данни от архива. Продължи?', style: TextStyle(color: _secondaryTextColor)),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Отказ', style: TextStyle(color: _secondaryTextColor))),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Възстанови', style: TextStyle(color: Colors.blue))),
+          ],
+        ),
+      ) ?? false;
+      if (!confirm) {
+        setState(() => _isRestoringLocal = false);
+        return;
+      }
+      final success = await _driveHelper.restoreFromLocal(selectedPath);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(success ? 'Възстановяването е успешно!' : 'Грешка при възстановяване'),
+          backgroundColor: success ? Colors.green : Colors.red,
+        ));
+        if (success) Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Грешка: $e'), backgroundColor: Colors.red));
+    } finally {
+      if (mounted) setState(() => _isRestoringLocal = false);
+    }
+  }
+
   Future<void> _performRestore() async {
     if (_googleAccountEmail == null) {
       await _signInGoogle();
@@ -145,22 +269,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
         builder: (ctx) => AlertDialog(
           backgroundColor: Color(_appBgColor),
           title: Text('Избор на архив', style: TextStyle(color: _textColor)),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: backups.length,
-              itemBuilder: (ctx, index) {
-                final backup = backups[index];
-                final date = backup['date']!.split('T')[0];
-                final time = backup['date']!.split('T')[1].substring(0, 5);
-                return ListTile(
-                  title: Text(backup['name']!, style: TextStyle(color: _textColor, fontSize: 14)),
-                  subtitle: Text('$date $time', style: TextStyle(color: _secondaryTextColor, fontSize: 12)),
-                  dense: true,
-                  onTap: () => Navigator.pop(ctx, backup['id']),
-                );
-              },
+          content: StatefulBuilder(
+            builder: (ctx, setDialogState) => SizedBox(
+              width: double.maxFinite,
+              child: backups.isEmpty
+                  ? const Center(child: Text('Няма архиви'))
+                  : ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: backups.length,
+                      itemBuilder: (ctx, index) {
+                        final backup = backups[index];
+                        final date = backup['date']!.split('T')[0];
+                        final time = backup['date']!.split('T')[1].substring(0, 5);
+                        return ListTile(
+                          title: Text(backup['name']!, style: TextStyle(color: _textColor, fontSize: 14)),
+                          subtitle: Text('$date $time', style: TextStyle(color: _secondaryTextColor, fontSize: 12)),
+                          dense: true,
+                          onTap: () => Navigator.pop(ctx, backup['id']),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
+                            onPressed: () async {
+                              final del = await showDialog<bool>(
+                                context: context,
+                                builder: (d) => AlertDialog(
+                                  backgroundColor: Color(_appBgColor),
+                                  title: Text('Изтриване', style: TextStyle(color: _textColor)),
+                                  content: Text('Изтрий архива ${backup['name']}?', style: TextStyle(color: _secondaryTextColor)),
+                                  actions: [
+                                    TextButton(onPressed: () => Navigator.pop(d, false), child: Text('Отказ', style: TextStyle(color: _secondaryTextColor))),
+                                    TextButton(onPressed: () => Navigator.pop(d, true), child: const Text('Изтрий', style: TextStyle(color: Colors.red))),
+                                  ],
+                                ),
+                              ) ?? false;
+                              if (del) {
+                                await _driveHelper.deleteBackup(backup['id']!);
+                                setDialogState(() => backups.removeAt(index));
+                              }
+                            },
+                          ),
+                        );
+                      },
+                    ),
             ),
           ),
           actions: [
@@ -361,7 +510,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Icon(Icons.account_circle, size: 18, color: _secondaryTextColor),
                       const SizedBox(width: 8),
                       Expanded(child: Text(_googleAccountEmail!, style: TextStyle(fontSize: 12, color: _secondaryTextColor), overflow: TextOverflow.ellipsis)),
-                      TextButton(onPressed: _signOutGoogle, child: const Text('Излез', style: TextStyle(fontSize: 12, color: Colors.red))),
+                      TextButton(onPressed: _signOutGoogle, child: const Text('Изход', style: TextStyle(fontSize: 12, color: Colors.red))),
                     ],
                   ),
                 ),
@@ -398,10 +547,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         child: _isBackingUp
                             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.cloud_upload, size: 18), SizedBox(width: 8), Text('Архивирай')]),
+                            : const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.cloud_upload, size: 16), SizedBox(width: 4), Text('Архивирай')]),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: ElevatedButton(
                         onPressed: _isRestoring ? null : _performRestore,
@@ -412,13 +561,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         child: _isRestoring
                             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.cloud_download, size: 18), SizedBox(width: 8), Text('Възстанови')]),
+                            : const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.cloud_download, size: 16), SizedBox(width: 4), Text('Възстанови')]),
                       ),
                     ),
                   ],
                 ),
               ),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
+              _buildSectionTitle('Локален архив'),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _isSavingLocal ? null : _performLocalBackup,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Color(_appBgColor).computeLuminance() > 0.5 ? Colors.teal : Colors.teal.shade700,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                        child: _isSavingLocal
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.save_alt, size: 16), SizedBox(width: 4), Text('Архивирай')]),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _isRestoringLocal ? null : _performLocalRestore,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Color(_appBgColor).computeLuminance() > 0.5 ? Colors.teal : Colors.teal.shade700,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                        child: _isRestoringLocal
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.restore, size: 16), SizedBox(width: 4), Text('Възстанови')]),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
+              ListTile(
+                leading: Icon(Icons.broken_image_outlined, size: 20, color: _textColor),
+                title: Text('Неизползвани снимки', style: TextStyle(color: _textColor)),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const OrphanedImagesScreen())),
+              ),
               ListTile(leading: Icon(Icons.storage, size: 20, color: _textColor), title: Text('База данни', style: TextStyle(color: _textColor)), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DbViewerScreen()))),
               ListTile(leading: Icon(Icons.folder_open, size: 20, color: _textColor), title: Text('Файлове', style: TextStyle(color: _textColor)), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LocalFilesViewerScreen()))),
               const SizedBox(height: 80),
@@ -536,4 +726,95 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
   bool isSelectedColorBright(int color) => Color(color).computeLuminance() > 0.5;
+}
+
+class OrphanedImagesScreen extends StatefulWidget {
+  const OrphanedImagesScreen({super.key});
+  @override
+  State<OrphanedImagesScreen> createState() => _OrphanedImagesScreenState();
+}
+
+class _OrphanedImagesScreenState extends State<OrphanedImagesScreen> {
+  final GoogleDriveHelper _driveHelper = GoogleDriveHelper();
+  List<String> _orphanPaths = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOrphans();
+  }
+
+  Future<void> _loadOrphans() async {
+    setState(() => _isLoading = true);
+    final paths = await _driveHelper.getOrphanedImagePaths();
+    if (mounted) setState(() { _orphanPaths = paths; _isLoading = false; });
+  }
+
+  Future<void> _deleteSingle(String path) async {
+    try { await File(path).delete(); } catch (e) {}
+    setState(() => _orphanPaths.remove(path));
+  }
+
+  Future<void> _deleteAll() async {
+    for (final path in _orphanPaths) {
+      try { await File(path).delete(); } catch (e) {}
+    }
+    setState(() => _orphanPaths.clear());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Неизползвани снимки (${_orphanPaths.length})'),
+        actions: [
+          if (_orphanPaths.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.delete_sweep, color: Colors.red),
+              onPressed: () async {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Изтриване на всички'),
+                    content: Text('Изтрий ${_orphanPaths.length} неизползвани снимки?'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отказ')),
+                      TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Изтрий', style: TextStyle(color: Colors.red))),
+                    ],
+                  ),
+                ) ?? false;
+                if (confirm) await _deleteAll();
+              },
+            ),
+        ],
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _orphanPaths.isEmpty
+              ? const Center(child: Text('Няма неизползвани снимки'))
+              : ListView.builder(
+                  padding: const EdgeInsets.all(8),
+                  itemCount: _orphanPaths.length,
+                  itemBuilder: (ctx, index) {
+                    final path = _orphanPaths[index];
+                    return Card(
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      child: ListTile(
+                        leading: ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: Image.file(File(path), width: 56, height: 56, fit: BoxFit.cover,
+                            errorBuilder: (c, e, s) => const Icon(Icons.broken_image, size: 40, color: Colors.grey)),
+                        ),
+                        title: Text(path.split(Platform.pathSeparator).last, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete_outline, color: Colors.red),
+                          onPressed: () => _deleteSingle(path),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+    );
+  }
 }

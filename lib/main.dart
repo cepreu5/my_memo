@@ -1474,7 +1474,23 @@ class _MainListScreenState extends State<MainListScreen> {
                 copy.remove('tags');
                 _openNoteForm(initialData: copy, startInEditMode: true);
               },
-              child: cardContent
+              child: Stack(
+                children: [
+                  cardContent,
+                  Positioned(
+                    right: 6,
+                    bottom: 6,
+                    child: GestureDetector(
+                      onTap: () => _openNoteForm(initialData: item, index: _filteredItems.indexOf(item), startInEditMode: false),
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(12)),
+                        child: Icon(Icons.visibility_outlined, size: 16, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
+              )
             ),
           ),
         ),

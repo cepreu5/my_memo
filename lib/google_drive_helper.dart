@@ -8,9 +8,9 @@ import 'package:path/path.dart' as p;
 import 'db_helper.dart';
 
 class GoogleDriveHelper {
-  static const String _appFolderName = 'MyMemo';
+  static const String _appFolderName = 'my memo';
   static const String _backupSubfolder = 'backups';
-  static const String _dbFileName = 'business_organizer.db';
+  static const String _dbFileName = 'my_memo.db';
 
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: [drive.DriveApi.driveFileScope],
@@ -120,6 +120,32 @@ class GoogleDriveHelper {
     } catch (e) {}
   }
 
+  Future<List<String>> getOrphanedImagePaths() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final notes = await _db.queryAllRows();
+      final referencedPaths = <String>{};
+      for (final note in notes) {
+        final path = note['imagePath']?.toString();
+        if (path != null && path.isNotEmpty) referencedPaths.add(path);
+      }
+      final List<String> orphans = [];
+      if (dir.existsSync()) {
+        for (final entity in dir.listSync()) {
+          if (entity is File) {
+            final fileName = p.basename(entity.path);
+            if (fileName.startsWith('img_') && !referencedPaths.contains(entity.path)) {
+              orphans.add(entity.path);
+            }
+          }
+        }
+      }
+      return orphans;
+    } catch (e) {
+      return [];
+    }
+  }
+
   Future<File> _createBackupZip() async {
     final archive = Archive();
     final dir = await getApplicationDocumentsDirectory();
@@ -145,9 +171,81 @@ class GoogleDriveHelper {
     final zipBytes = ZipEncoder().encode(archive);
     final tempDir = await getTemporaryDirectory();
     final timestamp = DateTime.now().toIso8601String().replaceAll(RegExp(r'[:.]'), '-');
-    final zipFile = File('${tempDir.path}/backup_$timestamp.zip');
+    final zipFile = File('${tempDir.path}/my_memo_$timestamp.zip');
     await zipFile.writeAsBytes(zipBytes!);
     return zipFile;
+  }
+
+  static const String _localBackupFolder = 'my_memo_backups';
+
+  Future<String?> saveBackupLocally() async {
+    try {
+      final zipFile = await _createBackupZip();
+      final backupDir = Directory('/storage/emulated/0/Download/$_localBackupFolder');
+      if (!backupDir.existsSync()) backupDir.createSync(recursive: true);
+      final timestamp = DateTime.now().toIso8601String().split('T')[0];
+      final destPath = p.join(backupDir.path, 'my_memo_$timestamp.zip');
+      await zipFile.copy(destPath);
+      await zipFile.delete();
+      return destPath;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  List<File> listLocalBackups() {
+    try {
+      final backupDir = Directory('/storage/emulated/0/Download/$_localBackupFolder');
+      if (!backupDir.existsSync()) return [];
+      return backupDir.listSync()
+          .whereType<File>()
+          .where((f) => p.basename(f.path).startsWith('my_memo_') && f.path.endsWith('.zip'))
+          .toList()
+        ..sort((a, b) => b.path.compareTo(a.path));
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<bool> restoreFromLocal(String zipPath) async {
+    try {
+      final zipFile = File(zipPath);
+      if (!await zipFile.exists()) return false;
+      final bytes = await zipFile.readAsBytes();
+      final archive = ZipDecoder().decodeBytes(bytes);
+      final dir = await getApplicationDocumentsDirectory();
+
+      for (final file in archive) {
+        if (file.isFile) {
+          final data = file.content as List<int>;
+          if (file.name == _dbFileName) {
+            final dbPath = p.join(dir.parent.path, 'databases', _dbFileName);
+            await File(dbPath).writeAsBytes(data);
+          } else if (file.name.startsWith('images/')) {
+            final fileName = p.split(file.name).last;
+            final outPath = p.join(dir.path, fileName);
+            await File(outPath).writeAsBytes(data);
+          }
+        }
+      }
+
+      _dbHelper = null;
+      await DatabaseHelper().resetDatabase();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> deleteBackup(String fileId) async {
+    try {
+      final api = await _getDriveApi();
+      if (api == null) return false;
+      await api.files.delete(fileId);
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 
   Future<bool> backupToDrive() async {
@@ -164,7 +262,7 @@ class GoogleDriveHelper {
       final timestamp = DateTime.now().toIso8601String().split('T')[0];
       final media = drive.Media(zipFile.openRead(), await zipFile.length());
       final file = drive.File()
-        ..name = 'backup_$timestamp.zip'
+        ..name = 'my_memo_$timestamp.zip'
         ..parents = [backupsFolderId];
 
       await api.files.create(file, uploadMedia: media);
@@ -207,7 +305,7 @@ class GoogleDriveHelper {
       final api = await _getDriveApi();
       if (api == null) return false;
 
-      String targetFileId = fileId;
+      String? targetFileId = fileId;
       if (targetFileId == null) {
         final myMemoFolderId = await _findOrCreateFolder(api, _appFolderName);
         if (myMemoFolderId == null) return false;
