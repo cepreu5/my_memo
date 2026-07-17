@@ -10,7 +10,7 @@ import 'db_helper.dart';
 class GoogleDriveHelper {
   static const String _appFolderName = 'my memo';
   static const String _backupSubfolder = 'backups';
-  static const String _dbFileName = 'my_memo.db';
+  static const String _dbFileName = 'business_organizer.db';
 
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: [drive.DriveApi.driveFileScope],

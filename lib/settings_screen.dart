@@ -167,24 +167,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: Color(_appBgColor),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           title: Text('Избор на архив', style: TextStyle(color: _textColor)),
+          contentPadding: EdgeInsets.zero,
           content: StatefulBuilder(
             builder: (ctx, setDialogState) => SizedBox(
-              width: double.maxFinite,
+              width: MediaQuery.of(context).size.width * 0.95,
               child: ListView.builder(
                 shrinkWrap: true,
+                padding: EdgeInsets.zero,
                 itemCount: localBackups.length,
                 itemBuilder: (ctx, index) {
                   final file = localBackups[index];
                   final name = p.basename(file.path);
-                  final dateStr = name.replaceAll('my_memo_', '').replaceAll('.zip', '');
+                  final modDate = file.lastModifiedSync();
+                  final dateStr = '${modDate.year}-${modDate.month.toString().padLeft(2, '0')}-${modDate.day.toString().padLeft(2, '0')} ${modDate.hour.toString().padLeft(2, '0')}:${modDate.minute.toString().padLeft(2, '0')}';
                   return ListTile(
-                    title: Text(name, style: TextStyle(color: _textColor, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                    title: Text(name, style: TextStyle(color: _textColor, fontSize: 13)),
                     subtitle: Text(dateStr, style: TextStyle(color: _secondaryTextColor, fontSize: 11)),
                     dense: true,
                     onTap: () => Navigator.pop(ctx, file.path),
                     trailing: IconButton(
                       icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
                       onPressed: () async {
                         final del = await showDialog<bool>(
                           context: context,
@@ -268,26 +275,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: Color(_appBgColor),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           title: Text('Избор на архив', style: TextStyle(color: _textColor)),
+          contentPadding: EdgeInsets.zero,
           content: StatefulBuilder(
             builder: (ctx, setDialogState) => SizedBox(
-              width: double.maxFinite,
+              width: MediaQuery.of(context).size.width * 0.95,
               child: backups.isEmpty
                   ? const Center(child: Text('Няма архиви'))
                   : ListView.builder(
                       shrinkWrap: true,
+                      padding: EdgeInsets.zero,
                       itemCount: backups.length,
                       itemBuilder: (ctx, index) {
                         final backup = backups[index];
-                        final date = backup['date']!.split('T')[0];
-                        final time = backup['date']!.split('T')[1].substring(0, 5);
+                        final utcDate = DateTime.parse(backup['date']!);
+                        final localDate = utcDate.toLocal();
+                        final date = '${localDate.year}-${localDate.month.toString().padLeft(2, '0')}-${localDate.day.toString().padLeft(2, '0')}';
+                        final time = '${localDate.hour.toString().padLeft(2, '0')}:${localDate.minute.toString().padLeft(2, '0')}';
                         return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
                           title: Text(backup['name']!, style: TextStyle(color: _textColor, fontSize: 14)),
                           subtitle: Text('$date $time', style: TextStyle(color: _secondaryTextColor, fontSize: 12)),
                           dense: true,
                           onTap: () => Navigator.pop(ctx, backup['id']),
                           trailing: IconButton(
                             icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
                             onPressed: () async {
                               final del = await showDialog<bool>(
                                 context: context,
@@ -510,7 +525,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Icon(Icons.account_circle, size: 18, color: _secondaryTextColor),
                       const SizedBox(width: 8),
                       Expanded(child: Text(_googleAccountEmail!, style: TextStyle(fontSize: 12, color: _secondaryTextColor), overflow: TextOverflow.ellipsis)),
-                      TextButton(onPressed: _signOutGoogle, child: const Text('Изход', style: TextStyle(fontSize: 12, color: Colors.red))),
+                      IconButton(
+                        icon: Icon(Icons.logout, size: 18, color: _textColor),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: _signOutGoogle,
+                      ),
                     ],
                   ),
                 ),
@@ -523,7 +543,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       const SizedBox(width: 8),
                       Text('Няма свързан акаунт', style: TextStyle(fontSize: 12, color: _secondaryTextColor)),
                       const Spacer(),
-                      TextButton(onPressed: _signInGoogle, child: const Text('Влез', style: TextStyle(fontSize: 12))),
+                      IconButton(
+                        icon: Icon(Icons.login, size: 18, color: _textColor),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: _signInGoogle,
+                      ),
                     ],
                   ),
                 ),
@@ -789,32 +814,41 @@ class _OrphanedImagesScreenState extends State<OrphanedImagesScreen> {
             ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _orphanPaths.isEmpty
-              ? const Center(child: Text('Няма неизползвани снимки'))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(8),
-                  itemCount: _orphanPaths.length,
-                  itemBuilder: (ctx, index) {
-                    final path = _orphanPaths[index];
-                    return Card(
-                      margin: const EdgeInsets.symmetric(vertical: 4),
-                      child: ListTile(
-                        leading: ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: Image.file(File(path), width: 56, height: 56, fit: BoxFit.cover,
-                            errorBuilder: (c, e, s) => const Icon(Icons.broken_image, size: 40, color: Colors.grey)),
-                        ),
-                        title: Text(path.split(Platform.pathSeparator).last, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete_outline, color: Colors.red),
-                          onPressed: () => _deleteSingle(path),
-                        ),
-                      ),
-                    );
-                  },
-                ),
+      body: Stack(
+        children: [
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _orphanPaths.isEmpty
+                  ? const Center(child: Text('Няма неизползвани снимки'))
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(8),
+                      itemCount: _orphanPaths.length,
+                      itemBuilder: (ctx, index) {
+                        final path = _orphanPaths[index];
+                        return Card(
+                          margin: const EdgeInsets.symmetric(vertical: 4),
+                          child: ListTile(
+                            leading: ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: Image.file(File(path), width: 56, height: 56, fit: BoxFit.cover,
+                                errorBuilder: (c, e, s) => const Icon(Icons.broken_image, size: 40, color: Colors.grey)),
+                            ), // title: Text(path.split(Platform.pathSeparator).last, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
+                            title: Text(path.split(Platform.pathSeparator).last, maxLines: 2, style: const TextStyle(fontSize: 13)),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.delete_outline, color: Colors.red),
+                              onPressed: () => _deleteSingle(path),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+          FlyMenu(
+            actions: [
+              FlyAction(icon: Icons.arrow_back, onTap: () => Navigator.pop(context), label: "Назад"),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
