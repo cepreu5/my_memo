@@ -5,6 +5,7 @@ import 'color_picker_helper.dart';
 import 'db_viewer.dart';
 import 'fly_menu.dart';
 import 'local_files_viewer.dart';
+import 'google_drive_helper.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -30,6 +31,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _maxTitleLength = 70;
   int _alignmentColumn = 30;
   int _gridWidthOffset = 10;
+  int _backupPeriodDays = 0;
   final TextEditingController _listLinesController = TextEditingController();
   final TextEditingController _gridLinesController = TextEditingController();
   final TextEditingController _listColumnsController = TextEditingController();
@@ -41,12 +43,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _maxTitleLengthController = TextEditingController();
   final TextEditingController _alignmentColumnController = TextEditingController();
   final TextEditingController _gridWidthOffsetController = TextEditingController();
+  final TextEditingController _backupPeriodController = TextEditingController();
   final List<Color> _availableColors = [
     Colors.white, const Color(0xFF0A1931), const Color(0xFFFF5E00), 
     const Color(0xFFFFC93C), const Color(0xFF6A2C70), const Color(0xFFB83B5E), 
     const Color(0xFF005082), Colors.black,
   ];
   List<Color> _customPalette = [];
+  final GoogleDriveHelper _driveHelper = GoogleDriveHelper();
+  String? _googleAccountEmail;
+  bool _isBackingUp = false;
+  bool _isRestoring = false;
 
   Color get _textColor => Color(_appBgColor).computeLuminance() > 0.5 ? Colors.black87 : Colors.white;
   Color get _secondaryTextColor => Color(_appBgColor).computeLuminance() > 0.5 ? Colors.black54 : Colors.white70;
@@ -55,6 +62,145 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _loadSettings();
+    _checkGoogleAccount();
+  }
+
+  Future<void> _checkGoogleAccount() async {
+    final email = await _driveHelper.getSignedInEmail();
+    if (mounted) setState(() => _googleAccountEmail = email);
+  }
+
+  Future<void> _signInGoogle() async {
+    final success = await _driveHelper.signIn();
+    if (success) {
+      await _checkGoogleAccount();
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Неуспешно влизане в Google акаунт')));
+    }
+  }
+
+  Future<void> _signOutGoogle() async {
+    await _driveHelper.signOut();
+    if (mounted) setState(() => _googleAccountEmail = null);
+  }
+
+  Future<void> _performBackup() async {
+    if (_googleAccountEmail == null) {
+      await _signInGoogle();
+      if (_googleAccountEmail == null) return;
+    }
+    if (!mounted) return;
+    setState(() => _isBackingUp = true);
+    try {
+      final orphanCount = await _driveHelper.findOrphanedImages();
+      bool cleanOrphans = false;
+      if (orphanCount > 0 && mounted) {
+        cleanOrphans = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: Color(_appBgColor),
+            title: Text('Намерени са $orphanCount неизползвани снимки', style: TextStyle(color: _textColor)),
+            content: Text('Тези снимки не са свързани с никоя бележка. Да бъдат ли изчистени преди архивирането?', style: TextStyle(color: _secondaryTextColor)),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Не', style: TextStyle(color: _secondaryTextColor))),
+              TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Да, изчисти', style: TextStyle(color: Colors.red))),
+            ],
+          ),
+        ) ?? false;
+      }
+      if (cleanOrphans) await _driveHelper.deleteOrphanedImages();
+      final success = await _driveHelper.backupToDrive();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(success ? 'Архивирането е успешно!' : 'Грешка при архивиране'),
+          backgroundColor: success ? Colors.green : Colors.red,
+        ));
+      }
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('last_backup_date', DateTime.now().toIso8601String());
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Грешка: $e'), backgroundColor: Colors.red));
+    } finally {
+      if (mounted) setState(() => _isBackingUp = false);
+    }
+  }
+
+  Future<void> _performRestore() async {
+    if (_googleAccountEmail == null) {
+      await _signInGoogle();
+      if (_googleAccountEmail == null) return;
+    }
+    if (!mounted) return;
+    setState(() => _isRestoring = true);
+    try {
+      final backups = await _driveHelper.listBackups();
+      if (!mounted) return;
+      if (backups.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Няма намерени архиви в Google Drive'), backgroundColor: Colors.orange));
+        setState(() => _isRestoring = false);
+        return;
+      }
+      final selectedId = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: Color(_appBgColor),
+          title: Text('Избор на архив', style: TextStyle(color: _textColor)),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: backups.length,
+              itemBuilder: (ctx, index) {
+                final backup = backups[index];
+                final date = backup['date']!.split('T')[0];
+                final time = backup['date']!.split('T')[1].substring(0, 5);
+                return ListTile(
+                  title: Text(backup['name']!, style: TextStyle(color: _textColor, fontSize: 14)),
+                  subtitle: Text('$date $time', style: TextStyle(color: _secondaryTextColor, fontSize: 12)),
+                  dense: true,
+                  onTap: () => Navigator.pop(ctx, backup['id']),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Отказ', style: TextStyle(color: _secondaryTextColor))),
+          ],
+        ),
+      );
+      if (selectedId == null) {
+        setState(() => _isRestoring = false);
+        return;
+      }
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: Color(_appBgColor),
+          title: Text('Възстановяване', style: TextStyle(color: _textColor)),
+          content: Text('Това ще замести всички текущи бележки с данни от архива. Продължи?', style: TextStyle(color: _secondaryTextColor)),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Отказ', style: TextStyle(color: _secondaryTextColor))),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Възстанови', style: TextStyle(color: Colors.blue))),
+          ],
+        ),
+      ) ?? false;
+      if (!confirm) {
+        setState(() => _isRestoring = false);
+        return;
+      }
+      final success = await _driveHelper.restoreFromDrive(fileId: selectedId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(success ? 'Възстановяването е успешно!' : 'Грешка при възстановяване'),
+          backgroundColor: success ? Colors.green : Colors.red,
+        ));
+        if (success) Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Грешка: $e'), backgroundColor: Colors.red));
+    } finally {
+      if (mounted) setState(() => _isRestoring = false);
+    }
   }
 
   @override
@@ -64,7 +210,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _listTitleSizeController.dispose(); _listContentSizeController.dispose();
     _formTitleSizeController.dispose(); _formContentSizeController.dispose();
     _maxTitleLengthController.dispose(); _alignmentColumnController.dispose();
-    _gridWidthOffsetController.dispose();
+    _gridWidthOffsetController.dispose(); _backupPeriodController.dispose();
     super.dispose();
   }
 
@@ -88,9 +234,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _maxTitleLength = prefs.getInt('max_title_length') ?? 70;
       _alignmentColumn = prefs.getInt('alignment_column') ?? 30;
       _gridWidthOffset = prefs.getInt('grid_width_offset') ?? 10;
+      _backupPeriodDays = prefs.getInt('backup_period_days') ?? 0;
       final customList = prefs.getStringList('custom_palette') ?? [];
       _customPalette = customList.map((s) => Color(int.parse(s))).toList();
       if (updateControllers) {
+        _backupPeriodController.text = _backupPeriodDays.toString();
         _listLinesController.text = _maxLinesList.toString();
         _gridLinesController.text = _maxLinesGrid.toString();
         _listColumnsController.text = _listColumns.toString();
@@ -127,6 +275,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.setInt('max_title_length', _maxTitleLength);
     await prefs.setInt('alignment_column', _alignmentColumn);
     await prefs.setInt('grid_width_offset', _gridWidthOffset);
+    await prefs.setInt('backup_period_days', _backupPeriodDays);
     await prefs.setStringList('custom_palette', _customPalette.map((c) => c.toARGB32().toString()).toList());
     if (mounted) Navigator.pop(context);
   }
@@ -202,6 +351,73 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
               _buildSectionTitle('Споделяне'),
               _buildNumberInput(title: 'Дължина на заглавие', controller: _maxTitleLengthController, min: 10, max: 500, onChanged: (val) => setState(() => _maxTitleLength = val)),
+              Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
+              _buildSectionTitle('Архивиране в Google Drive'),
+              if (_googleAccountEmail != null) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  child: Row(
+                    children: [
+                      Icon(Icons.account_circle, size: 18, color: _secondaryTextColor),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(_googleAccountEmail!, style: TextStyle(fontSize: 12, color: _secondaryTextColor), overflow: TextOverflow.ellipsis)),
+                      TextButton(onPressed: _signOutGoogle, child: const Text('Излез', style: TextStyle(fontSize: 12, color: Colors.red))),
+                    ],
+                  ),
+                ),
+              ] else ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  child: Row(
+                    children: [
+                      Icon(Icons.account_circle_outlined, size: 18, color: _secondaryTextColor),
+                      const SizedBox(width: 8),
+                      Text('Няма свързан акаунт', style: TextStyle(fontSize: 12, color: _secondaryTextColor)),
+                      const Spacer(),
+                      TextButton(onPressed: _signInGoogle, child: const Text('Влез', style: TextStyle(fontSize: 12))),
+                    ],
+                  ),
+                ),
+              ],
+              _buildNumberInput(title: 'Напомняне (дни)', controller: _backupPeriodController, min: 0, max: 365, onChanged: (val) => setState(() => _backupPeriodDays = val)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                child: Text(_backupPeriodDays == 0 ? 'Изключено' : 'Напомняне на всеки $_backupPeriodDays дни', style: TextStyle(fontSize: 11, color: _secondaryTextColor)),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _isBackingUp ? null : _performBackup,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Color(_appBgColor).computeLuminance() > 0.5 ? Colors.blue : Colors.blue.shade700,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                        child: _isBackingUp
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.cloud_upload, size: 18), SizedBox(width: 8), Text('Архивирай')]),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _isRestoring ? null : _performRestore,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Color(_appBgColor).computeLuminance() > 0.5 ? Colors.orange : Colors.orange.shade700,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                        child: _isRestoring
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.cloud_download, size: 18), SizedBox(width: 8), Text('Възстанови')]),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
               ListTile(leading: Icon(Icons.storage, size: 20, color: _textColor), title: Text('База данни', style: TextStyle(color: _textColor)), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DbViewerScreen()))),
               ListTile(leading: Icon(Icons.folder_open, size: 20, color: _textColor), title: Text('Файлове', style: TextStyle(color: _textColor)), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LocalFilesViewerScreen()))),

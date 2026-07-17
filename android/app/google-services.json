@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1037908468269",
+    "project_id": "my-memo-cx",
+    "storage_bucket": "my-memo-cx.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1037908468269:android:4a65b701b82f6af6530ea4",
+        "android_client_info": {
+          "package_name": "com.example.my_scr"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBbuxRtB64NdyodCQpUqpIwHD3tvY2QPEc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -111,14 +111,16 @@ class _MainListScreenState extends State<MainListScreen> {
     }, onError: (err) => debugPrint("Грешка при споделяне: $err"));
 
     try {
-      // 2. Обработваме споделяне, ако приложението е стартирано от него.
-      final initialMedia = await ReceiveSharingIntent.instance.getInitialMedia();
-      if (initialMedia.isNotEmpty) await _handleSharedMedia(initialMedia);
-
       await CrossPlatformVideoThumbnails.initialize();
       await _loadSettings();
       await _refreshItems();
       FlutterNativeSplash.remove();
+      _checkBackupReminder();
+
+      // 2. Обработваме споделяне, ако приложението е стартирано от него.
+      // След _refreshItems(), за да има налични етикети.
+      final initialMedia = await ReceiveSharingIntent.instance.getInitialMedia();
+      if (initialMedia.isNotEmpty) _handleSharedMedia(initialMedia);
     } catch (e) {
       debugPrint("Грешка инициализация: $e");
       FlutterNativeSplash.remove();
@@ -160,6 +162,54 @@ class _MainListScreenState extends State<MainListScreen> {
         _noteColors.addAll(customList.map((s) => Color(int.parse(s))));
       }
     });
+  }
+
+  Future<void> _checkBackupReminder() async {
+    final prefs = await SharedPreferences.getInstance();
+    final int periodDays = prefs.getInt('backup_period_days') ?? 0;
+    if (periodDays <= 0) return;
+    final String? lastBackupStr = prefs.getString('last_backup_date');
+    final DateTime now = DateTime.now();
+    DateTime lastBackup;
+    if (lastBackupStr != null) {
+      try { lastBackup = DateTime.parse(lastBackupStr); } catch (e) { lastBackup = DateTime(2000); }
+    } else {
+      lastBackup = DateTime(2000);
+    }
+    final int daysSince = now.difference(lastBackup).inDays;
+    if (daysSince < periodDays) return;
+    if (!mounted) return;
+    final int appColor = prefs.getInt('bg_color') ?? const Color(0xFFFF5E00).toARGB32();
+    final Color textColor = Color(appColor).computeLuminance() > 0.5 ? Colors.black87 : Colors.white;
+    final Color secondaryTextColor = Color(appColor).computeLuminance() > 0.5 ? Colors.black54 : Colors.white70;
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Color(appColor),
+        title: Text('Напомняне за архивиране', style: TextStyle(color: textColor)),
+        content: Text('Последният бекъп е преди $daysSince дни. Желаете ли да архивирате данните си?', style: TextStyle(color: secondaryTextColor)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Отказ', style: TextStyle(color: secondaryTextColor)),
+          ),
+          TextButton(
+            onPressed: () async {
+              await prefs.setString('last_backup_date', now.toIso8601String());
+              if (mounted) Navigator.pop(ctx);
+            },
+            child: Text('Отложи', style: TextStyle(color: secondaryTextColor)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen()));
+            },
+            child: Text('Архивирай', style: TextStyle(color: Colors.blue)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -935,7 +985,10 @@ class _MainListScreenState extends State<MainListScreen> {
   // Отваря екрана с общи настройки на приложението.
   Future<void> _goToSettings() async {
     await Navigator.push(context, MaterialPageRoute(builder: (c) => const SettingsScreen()));
-    if (mounted) _loadSettings();
+    if (mounted) {
+      await _loadSettings();
+      await _refreshItems();
+    }
   }
 
   // Превключва между списъчен и матричен изглед на бележките и записва избора.
@@ -1440,7 +1493,7 @@ class _MainListScreenState extends State<MainListScreen> {
         final lines = content.split('\n');
         List<Widget> widgets = [];
         int physicalLinesUsed = 0;
-        int maxAllowedLines = isGrid ? _maxLinesGrid : _maxLinesList;
+        int maxAllowedLines = _compactGridView ? 2 : (isGrid ? _maxLinesGrid : _maxLinesList);
         
         // Calculate dynamic target width based on available pixels and char width
         final tp = TextPainter(

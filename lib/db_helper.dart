@@ -90,6 +90,13 @@ class DatabaseHelper {
     final List<Map<String, dynamic>> result = await db.query('notes', where: 'imagePath = ? AND id != ?', whereArgs: [path, excludingId]);
     return result.isNotEmpty;
   }
+
+  Future<void> resetDatabase() async {
+    if (_database != null) {
+      await _database!.close();
+      _database = null;
+    }
+  }
 }
 // Future<List<Map<String, dynamic>>> getItems() async {
 //   final db = await instance.database;

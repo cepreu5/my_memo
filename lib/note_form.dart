@@ -52,6 +52,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   int _alignmentColumn = 30;
   bool _isAutoFormatting = false;
   int _isCompleted = 0;
+  int _maxTitleLength = 70;
   bool _forceTwoDecimals = true;
   bool _canPop = false;
   int _appColor = const Color(0xFFFF5E00).toARGB32();
@@ -67,6 +68,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   Color get _textColor => _contrast(_selectedColor, Colors.black87, Colors.white);
   Color get _secondaryTextColor => _contrast(_selectedColor, Colors.black54, Colors.white70);
   Color get _areaColor => Color.lerp(_selectedColor, _contrast(_selectedColor, Colors.black, Colors.white), 0.05)!;
+  Color get _headerColor => Color.lerp(_selectedColor, _contrast(_selectedColor, Colors.black, Colors.white), 0.12)!;
   Color _contrast(Color background, Color ifBright, Color ifDark) {
     return background.computeLuminance() > 0.5 ? ifBright : ifDark;
   }
@@ -98,6 +100,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       _fontSizeContent = prefs.getDouble('form_content_size') ?? 16;
       _appColor = prefs.getInt('bg_color') ?? const Color(0xFFFF5E00).toARGB32();
       _alignmentColumn = prefs.getInt('alignment_column') ?? 30;
+      _maxTitleLength = prefs.getInt('max_title_length') ?? 70;
       final customList = prefs.getStringList('custom_palette') ?? [];
       final customColors = customList.map((s) => Color(int.parse(s))).toList();
       for (var c in customColors) { if (!_noteColors.contains(c)) _noteColors.add(c); }
@@ -494,7 +497,9 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     final String firstPara = parts[0].trim();
     if (firstPara.isEmpty) return;
     setState(() {
-      _titleController.text = '${_titleController.text.trim()} $firstPara'.trim();
+      String newTitle = '${_titleController.text.trim()} $firstPara'.trim();
+      if (newTitle.length > _maxTitleLength) newTitle = newTitle.substring(0, _maxTitleLength);
+      _titleController.text = newTitle;
       _contentController.text = parts.sublist(1).join('\n').trim();
     });
   }
@@ -785,9 +790,9 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       child: Tooltip(
         message: tooltip,
         child: CircleAvatar(
-          radius: 18,
+          radius: 24,
           backgroundColor: Colors.black54,
-          child: Icon(icon, color: Colors.white, size: 20),
+          child: Icon(icon, color: Colors.white, size: 26),
         ),
       ),
     );
@@ -841,12 +846,12 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onHorizontalDragEnd: (details) {
-        if (_currentIndex == null) return;
+        if (_currentIndex == null || _isEditing) return;
         if (details.primaryVelocity! > 0) { _switchToNote(_currentIndex! + 1); } // Надясно = следваща
         else if (details.primaryVelocity! < 0) { _switchToNote(_currentIndex! - 1); } // Наляво = предишна
       },
       onVerticalDragEnd: (details) {
-        if (_currentIndex == null) return;
+        if (_currentIndex == null || _isEditing) return;
         if (details.primaryVelocity! < 0) { _switchToNote(_currentIndex! + 1); } // Нагоре = следваща
         else if (details.primaryVelocity! > 0) { _switchToNote(_currentIndex! - 1); } // Надолу = предишна
       },
@@ -902,6 +907,115 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
           children: [
             Column(
               children: [
+                // ── Fixed title + tags (view mode) ──
+                if (!_isEditing) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(color: _headerColor),
+                    child: _titleController.text.isNotEmpty
+                        ? Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(_titleController.text, style: TextStyle(fontSize: _fontSizeTitle, fontWeight: FontWeight.bold, color: _textColor)))
+                        : const SizedBox.shrink(),
+                  ),
+                  if (_selectedTags.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4.0),
+                      child: Wrap(spacing: 6, runSpacing: 0, children: _selectedTags.map((tag) => Chip(
+                        label: Text(tag, style: const TextStyle(fontSize: 12, color: Colors.black, fontWeight: FontWeight.bold)),
+                        backgroundColor: Colors.white,
+                        side: const BorderSide(color: Colors.black),
+                        elevation: 2,
+                        padding: const EdgeInsets.only(left: 4.0),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      )).toList()),
+                    ),
+                ],
+                // ── Fixed title (edit mode) ──
+                if (_isEditing)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(color: _headerColor),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        if (_contentController.text.trim().isNotEmpty)
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.only(right: 8.0),
+                            onPressed: _moveFirstParagraphToTitle,
+                            icon: Icon(Icons.arrow_upward, size: 18, color: _secondaryTextColor),
+                            tooltip: 'Премести първия параграф към заглавието',
+                          ),
+                        Expanded(
+                          child: TextField(
+                            controller: _titleController,
+                            maxLines: null,
+                            style: TextStyle(fontSize: _fontSizeTitle, fontWeight: FontWeight.bold, color: _textColor),
+                            decoration: InputDecoration(hintText: 'Заглавие', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor), contentPadding: EdgeInsets.zero, isDense: true),
+                            contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
+                          ),
+                        ),
+                        if (_titleController.text.isNotEmpty)
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.only(left: 8.0),
+                            onPressed: () => _titleController.clear(),
+                            icon: Icon(Icons.close, size: 18, color: _secondaryTextColor),
+                            tooltip: 'Изчисти заглавието',
+                          ),
+                      ],
+                    ),
+                  ),
+                // ── Fixed tags (edit mode) ──
+                if (_isEditing && _selectedTags.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4.0),
+                    child: Wrap(spacing: 6, runSpacing: 0, children: _selectedTags.map((tag) => Chip(
+                      label: Text(tag, style: const TextStyle(fontSize: 12, color: Colors.black, fontWeight: FontWeight.bold)),
+                      backgroundColor: Colors.white,
+                      side: const BorderSide(color: Colors.black),
+                      elevation: 2,
+                      padding: const EdgeInsets.only(left: 4.0),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      onDeleted: () => setState(() => _selectedTags.remove(tag)),
+                      deleteIconColor: Colors.black,
+                    )).toList()),
+                  ),
+                // ── Fixed toolbar (edit mode) ──
+                if (_isEditing)
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                    width: double.infinity,
+                    decoration: BoxDecoration(color: _headerColor),
+                    child: Container(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: _textColor.withValues(alpha: 0.1), width: 1.0))),
+                      child: Row(
+                        children: [
+                          IconButton(icon: const Icon(Icons.first_page), onPressed: _moveToLineStart, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Начало на ред'),
+                          const Spacer(),
+                          GestureDetector(
+                            onTap: () => setState(() => _forceTwoDecimals = !_forceTwoDecimals),
+                            child: Tooltip(message: 'Суми с 2 знака', child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(_forceTwoDecimals ? Icons.check : Icons.close, size: 12, color: _secondaryTextColor),
+                                Text('.00', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'monospace', color: _secondaryTextColor)),
+                              ],
+                            )),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(icon: const Icon(Icons.keyboard_tab), onPressed: _moveToLineEndOrTab, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Край на ред / Таб'),
+                          const SizedBox(width: 8),
+                          IconButton(icon: const Icon(Icons.control_point_duplicate), onPressed: _duplicateCurrentLine, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Дублирай реда'),
+                          const SizedBox(width: 8),
+                          IconButton(icon: const Icon(Icons.delete_sweep_outlined), onPressed: _deleteCurrentLine, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Изтрий реда'),
+                        ],
+                      ),
+                    ),
+                  ),
+                // ── Scrollable content ──
                 Expanded(
                   child: SingleChildScrollView(
                     padding: EdgeInsets.zero,
@@ -914,7 +1028,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                           children: [
                             if (_imagePath != null)
                               GestureDetector(
-                                onTap: _openFullScreenImage, // Основното докосване отваря на цял екран
+                                onTap: _openFullScreenImage,
                                 child: Stack(
                                   children: [
                                     Container(
@@ -926,7 +1040,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                         child: Image.file(File(_imagePath!), fit: BoxFit.contain, errorBuilder: (c, e, s) => const Icon(Icons.broken_image, size: 40, color: Colors.grey)),
                                       ),
                                     ),
-                                    if (_isEditing) // Показваме бутоните само в режим на редактиране
+                                    if (_isEditing)
                                       Positioned(
                                         right: 8,
                                         bottom: 8,
@@ -942,162 +1056,80 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                 ),
                               ),
                             const SizedBox(height: 8),
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(color: _areaColor),
-                              child: _isEditing
-                                ? Row(
-                                    crossAxisAlignment: CrossAxisAlignment.center,
-                                    children: [
-                                      if (_contentController.text.trim().isNotEmpty)
-                                        IconButton(
-                                          visualDensity: VisualDensity.compact,
-                                          padding: const EdgeInsets.only(right: 8.0),
-                                          onPressed: _moveFirstParagraphToTitle,
-                                          icon: Icon(Icons.arrow_upward, size: 18, color: _secondaryTextColor),
-                                          tooltip: 'Премести първия параграф към заглавието',
-                                        ),
-                                      Expanded(
-                                        child: TextField(
-                                          controller: _titleController,
-                                          maxLines: null,
-                                          style: TextStyle(fontSize: _fontSizeTitle, fontWeight: FontWeight.bold, color: _textColor),
-                                          decoration: InputDecoration(hintText: 'Заглавие', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor), contentPadding: EdgeInsets.zero, isDense: true),
-                                          contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
-                                        ),
-                                      ),
-                                      if (_titleController.text.isNotEmpty)
-                                        IconButton(
-                                          visualDensity: VisualDensity.compact,
-                                          padding: const EdgeInsets.only(left: 8.0),
-                                          onPressed: () => _titleController.clear(),
-                                          icon: Icon(Icons.close, size: 18, color: _secondaryTextColor),
-                                          tooltip: 'Изчисти заглавието',
-                                        ),
-                                    ],
-                                  )
-                                : _titleController.text.isNotEmpty 
-                                    ? Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(_titleController.text, style: TextStyle(fontSize: _fontSizeTitle, fontWeight: FontWeight.bold, color: _textColor)))
-                                    : const SizedBox.shrink(),
-                            ),
-                            if (_selectedTags.isNotEmpty)
+                            if (_isEditing)
                               Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 4.0),
-                                child: Wrap(spacing: 6, runSpacing: 0, children: _selectedTags.map((tag) => Chip(
-                                  label: Text(tag, style: const TextStyle(fontSize: 12, color: Colors.black)),
-                                  backgroundColor: Colors.white,
-                                  side: const BorderSide(color: Colors.black),
-                                  // padding: EdgeInsets.zero, 
-                                  padding: const EdgeInsets.only(left: 4.0),
-                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  onDeleted: _isEditing ? () => setState(() => _selectedTags.remove(tag)) : null,
-                                  deleteIconColor: Colors.black,
-                                )).toList()),
+                                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                                child: TextField(
+                                  controller: _contentController,
+                                  focusNode: _contentFocusNode,
+                                  maxLines: null,
+                                  style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.2),
+                                  decoration: InputDecoration(hintText: 'Съдържание...', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor), contentPadding: EdgeInsets.zero),
+                                  onChanged: _onContentChanged,
+                                  onSubmitted: (v) => _save(),
+                                  contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
+                                ),
+                              )
+                            else
+                              Container(
+                                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                                width: double.infinity,
+                                decoration: BoxDecoration(color: _areaColor),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: _contentController.text.split('\n').asMap().entries.map((e) {
+                                    final line = e.value;
+                                    final index = e.key;
+                                    final checkMatch = RegExp(r'^([☐☑]|\[\s?[xXvV]?\s?\])\s+').firstMatch(line);
+                                    if (checkMatch != null) {
+                                      final isChecked = line.startsWith('☑') || checkMatch.group(0)!.contains(RegExp(r'[xv]'));
+                                      return InkWell(
+                                        onTap: () => _toggleCheckboxLine(index),
+                                        child: Container(
+                                          width: double.infinity,
+                                          padding: const EdgeInsets.symmetric(vertical: 2),
+                                          child: Row(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Icon(isChecked ? Icons.check_box : Icons.check_box_outline_blank, size: 22, color: _textColor),
+                                              const SizedBox(width: 8),
+                                              Expanded(child: Text(
+                                                line.substring(checkMatch.end),
+                                                style: TextStyle(fontSize: _fontSizeContent, color: _textColor, decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.0, fontFamily: line.contains('..') ? 'monospace' : null),
+                                              )),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                    if (RegExp(r'\.{2,}').hasMatch(line)) {
+                                      return SelectableText(
+                                        line,
+                                        style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.0, fontFamily: 'monospace'),
+                                        contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
+                                      );
+                                    }
+                                    final hasLink = RegExp(r'https?://|www\.').hasMatch(line);
+                                    if (hasLink) {
+                                      return SelectableLinkify(
+                                        text: line,
+                                        onOpen: _onLinkOpen, maxLines: 1,
+                                        style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.0, fontFamily: line.contains('..') ? 'monospace' : null),
+                                        linkStyle: TextStyle(color: _textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue),
+                                        contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
+                                      );
+                                    }
+                                    return SelectableText(
+                                      line,
+                                      style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.2, fontFamily: line.contains('..') ? 'monospace' : null),
+                                      contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
+                                    );
+                                  }).toList(),
+                                ),
                               ),
-                            const SizedBox(height: 4),
-                            Container( // toolbar
-                               padding: EdgeInsets.fromLTRB(16, _isEditing ? 4 : 16, 16, 16),
-                               width: double.infinity,
-                               decoration: BoxDecoration(color: _areaColor),
-                               child: _isEditing 
-                                 ? Column(
-                                     crossAxisAlignment: CrossAxisAlignment.start,
-                                     children: [
-                                       Container(
-                                         padding: const EdgeInsets.only(bottom: 4),
-                                         margin: const EdgeInsets.only(bottom: 4),
-                                         decoration: BoxDecoration(border: Border(bottom: BorderSide(color: _textColor.withValues(alpha: 0.1), width: 1.0))),
-                                         child: Row(
-                                           children: [
-                                             IconButton(icon: const Icon(Icons.first_page), onPressed: _moveToLineStart, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Начало на ред'),
-                                             const Spacer(),
-                                             GestureDetector(
-                                               onTap: () => setState(() => _forceTwoDecimals = !_forceTwoDecimals),
-                                               child: Tooltip(message: 'Суми с 2 знака', child: Row(
-                                                 mainAxisSize: MainAxisSize.min,
-                                                 children: [
-                                                   Icon(_forceTwoDecimals ? Icons.check : Icons.close, size: 12, color: _secondaryTextColor),
-                                                   Text('.00', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'monospace', color: _secondaryTextColor)),
-                                                 ],
-                                               )),
-                                             ),
-                                             const SizedBox(width: 8),
-                                             IconButton(icon: const Icon(Icons.keyboard_tab), onPressed: _moveToLineEndOrTab, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Край на ред / Таб'),
-                                             const SizedBox(width: 8),
-                                             IconButton(icon: const Icon(Icons.control_point_duplicate), onPressed: _duplicateCurrentLine, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Дублирай реда'),
-                                             const SizedBox(width: 8),
-                                             IconButton(icon: const Icon(Icons.delete_sweep_outlined), onPressed: _deleteCurrentLine, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Изтрий реда'),
-                                           ],
-                                         ),
-                                       ),
-                                       TextField(
-                                         controller: _contentController, 
-                                         focusNode: _contentFocusNode, 
-                                         maxLines: null, 
-                                         style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.2), 
-                                         decoration: InputDecoration(hintText: 'Съдържание...', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor), contentPadding: EdgeInsets.zero),
-                                         onChanged: _onContentChanged,
-                                         onSubmitted: (v) => _save(),
-                                         contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
-                                       ),
-                                     ],
-                                   )
-                                 : Column(
-                                     crossAxisAlignment: CrossAxisAlignment.start,
-                                       children: _contentController.text.split('\n').asMap().entries.map((e) {
-                                         final line = e.value;
-                                         final index = e.key;
-                                         final checkMatch = RegExp(r'^([☐☑]|\[\s?[xXvV]?\s?\])\s+').firstMatch(line);
-                                         if (checkMatch != null) {
-                                           final isChecked = line.startsWith('☑') || checkMatch.group(0)!.contains(RegExp(r'[xv]'));
-                                           return InkWell(
-                                             onTap: () => _toggleCheckboxLine(index),
-                                             child: Container(
-                                               width: double.infinity,
-                                               padding: const EdgeInsets.symmetric(vertical: 2),
-                                               child: Row(
-                                                 crossAxisAlignment: CrossAxisAlignment.start,
-                                                 children: [
-                                                   Icon(isChecked ? Icons.check_box : Icons.check_box_outline_blank, size: 22, color: _textColor),
-                                                   const SizedBox(width: 8),
-                                                   Expanded(child: Text(
-                                                     line.substring(checkMatch.end),
-                                                     style: TextStyle(fontSize: _fontSizeContent, color: _textColor, decoration: isChecked ? TextDecoration.lineThrough : null, height: 1.0, fontFamily: line.contains('..') ? 'monospace' : null),
-                                                   )),
-                                                 ],
-                                               ),
-                                             ),
-                                           );
-                                         }
-                                         if (RegExp(r'\.{2,}').hasMatch(line)) {
-                                           return SelectableText(
-                                             line,
-                                             style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.0, fontFamily: 'monospace'),
-                                             contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
-                                           );
-                                         }
-                                         final hasLink = RegExp(r'https?://|www\.').hasMatch(line);
-                                         if (hasLink) {
-                                           return SelectableLinkify(
-                                             text: line,
-                                             onOpen: _onLinkOpen, maxLines: 1,
-                                             style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.0, fontFamily: line.contains('..') ? 'monospace' : null),
-                                             linkStyle: TextStyle(color: _textColor == Colors.white ? Colors.lightBlueAccent : Colors.blue),
-                                             contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
-                                           );
-                                         }
-                                         return SelectableText(
-                                           line,
-                                           style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.2, fontFamily: line.contains('..') ? 'monospace' : null),
-                                           contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
-                                         );
-                                       }).toList(),
-                                   ),
-                            ),
                             if (_isEditing && _imagePath != null && _isLocalCopy == 0)
                               Padding(
-                                padding: const EdgeInsets.only(top: 10),
+                                padding: const EdgeInsets.only(top: 10, left: 16, right: 16),
                                 child: SwitchListTile(
                                   title: Text("Копирай локално", style: TextStyle(fontSize: 14, color: _textColor)),
                                   subtitle: Text("Запазва снимката, дори да бъде изтрита от галерията", style: TextStyle(fontSize: 11, color: _secondaryTextColor)),
