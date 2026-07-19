@@ -270,10 +270,8 @@ class _MainListScreenState extends State<MainListScreen> {
     if (sharedFile.type == SharedMediaType.text || sharedFile.type == SharedMediaType.url || (sharedFile.type == SharedMediaType.video && isUrl)) { 
       await _handleSharedText(sharedFile.path); 
     } else if (sharedFile.type == SharedMediaType.video && !isUrl) {
-      // diagLog.writeln("Handling as a video file.");
-      _openNoteForm(initialData: { 'title': '🎬 ', 'content': sharedFile.path, 'imagePath': sharedFile.path, 'needsThumbnail': true, 'id': null, 'color': null, 'isCompleted': 0, 'tags': null });
+      _openNoteForm(initialData: { 'title': '🎬 ', 'content': sharedFile.path, 'id': null, 'color': null, 'isCompleted': 0, 'tags': null, 'thumbnailFuture': _fetchVideoThumbnailAsync(sharedFile.path) });
     } else {
-      // diagLog.writeln("Handling as an image file.");
       _openNoteForm(initialData: { 'imagePath': sharedFile.path, 'title': '📷 ', 'content': '', 'id': null, 'color': null, 'isCompleted': 0, 'tags': null });
     }
   }
@@ -335,30 +333,36 @@ class _MainListScreenState extends State<MainListScreen> {
   }
   */
 
-  // Анализира споделен текст за линкове или YouTube ID и подготвя създаването на нова бележка.
-  Future<void> _handleSharedText(String text) async {
-    if (text.isEmpty) return;
-    // --- DEBUG ---
-    // diagLog.writeln("Handling as text...");
+  Future<String?> _fetchVideoThumbnailAsync(String videoPath) async {
+    try {
+      final result = await CrossPlatformVideoThumbnails.generateThumbnail(
+        videoPath,
+        const ThumbnailOptions(timePosition: 0.0),
+      );
+      if (result.data.isNotEmpty) {
+        final appDir = await getApplicationDocumentsDirectory();
+        final fileName = 'video_thumb_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final thumbPath = p.join(appDir.path, fileName);
+        await File(thumbPath).writeAsBytes(result.data);
+        return thumbPath;
+      }
+    } catch (e) {
+      debugPrint("Грешка при video thumbnail: $e");
+    }
+    return null;
+  }
 
-    String? youtubeId = _extractYoutubeId(text);
-    String? tiktokUrl = _extractTiktokUrl(text);
-    String? facebookUrl = _extractFacebookVideoUrl(text);
-    String? thumbPath;
-    String title = '📝 ';
-    if (youtubeId != null) {
-      title = '🎬 ';
-      try {
+  Future<String?> _fetchNetworkThumbnailAsync(String? youtubeId, String? tiktokUrl, String? facebookUrl) async {
+    try {
+      if (youtubeId != null) {
         final response = await http.get(Uri.parse('https://img.youtube.com/vi/$youtubeId/0.jpg'));
         if (response.statusCode == 200) {
           final appDir = await getApplicationDocumentsDirectory();
-          thumbPath = p.join(appDir.path, 'yt_thumb_$youtubeId.jpg');
+          final thumbPath = p.join(appDir.path, 'yt_thumb_$youtubeId.jpg');
           await File(thumbPath).writeAsBytes(response.bodyBytes);
+          return thumbPath;
         }
-      } catch (e) { debugPrint("Грешка при YouTube thumbnail: $e"); }
-    } else if (tiktokUrl != null) {
-      title = '🎬 ';
-      try {
+      } else if (tiktokUrl != null) {
         final oembedResp = await http.get(Uri.parse('https://www.tiktok.com/oembed?url=$tiktokUrl'));
         if (oembedResp.statusCode == 200) {
           final data = jsonDecode(oembedResp.body);
@@ -368,84 +372,55 @@ class _MainListScreenState extends State<MainListScreen> {
             if (thumbResp.statusCode == 200) {
               final appDir = await getApplicationDocumentsDirectory();
               final fileName = 'tiktok_thumb_${DateTime.now().millisecondsSinceEpoch}.jpg';
-              thumbPath = p.join(appDir.path, fileName);
+              final thumbPath = p.join(appDir.path, fileName);
               await File(thumbPath).writeAsBytes(thumbResp.bodyBytes);
+              return thumbPath;
             }
           }
         }
-      } catch (e) { debugPrint("Грешка при TikTok thumbnail: $e"); }
-    } else if (facebookUrl != null) {
-      // diagLog.writeln("Found Facebook URL: $facebookUrl");
-      title = '🎬 ';
-      try {
-        // --- НОВ МЕТОД (Web Scraping с User-Agent) ---
-        // 1. Проследяваме пренасочването, за да получим финалния URL
+      } else if (facebookUrl != null) {
         final resolvedUrl = await _resolveFacebookRedirect(facebookUrl);
-        
-        // 2. Изпращаме GET заявка с User-Agent на WhatsApp, за да получим Open Graph таговете
-        // diagLog.writeln("Scraping Open Graph tags from: $resolvedUrl");
         final response = await http.get(
           Uri.parse(resolvedUrl),
           headers: {'User-Agent': 'WhatsApp/2.21.24.22 A'},
         );
-        // diagLog.writeln("Scraping response status: ${response.statusCode}");
-
         if (response.statusCode == 200) {
           final html = response.body;
           final regex = RegExp(r'property="og:image"\s+content="([^"]+)"');
           final match = regex.firstMatch(html);
           String? imageUrl = match?.group(1)?.replaceAll('&amp;', '&');
-          // diagLog.writeln("Found thumbnail via Open Graph: $imageUrl");
-
           if (imageUrl != null) {
             final thumbResp = await http.get(Uri.parse(imageUrl));
-            // diagLog.writeln("Thumbnail download status: ${thumbResp.statusCode}");
             if (thumbResp.statusCode == 200 && thumbResp.bodyBytes.isNotEmpty) {
               final appDir = await getApplicationDocumentsDirectory();
               final fileName = 'fb_thumb_${DateTime.now().millisecondsSinceEpoch}.jpg';
-              thumbPath = p.join(appDir.path, fileName);
+              final thumbPath = p.join(appDir.path, fileName);
               await File(thumbPath).writeAsBytes(thumbResp.bodyBytes);
-              // diagLog.writeln("Thumbnail saved to: $thumbPath");
+              return thumbPath;
             }
           }
         }
-
-        // --- СТАР МЕТОД (Коментиран) ---
-        /*
-        // 1. Проследяваме пренасочването, за да получим финалния URL
-        final resolvedUrl = await _resolveFacebookRedirect(facebookUrl, diagLog);
-        
-        // 2. Изпращаме GET заявка с User-Agent на WhatsApp, за да получим Open Graph таговете
-        diagLog.writeln("Scraping Open Graph tags from: $resolvedUrl");
-        final response = await http.get(
-          Uri.parse(resolvedUrl),
-          headers: {'User-Agent': 'WhatsApp/2.21.24.22 A'},
-        );
-        diagLog.writeln("Scraping response status: ${response.statusCode}");
-
-        if (response.statusCode == 200) {
-          final html = response.body;
-          final regex = RegExp(r'property="og:image"\s+content="([^"]+)"');
-          final match = regex.firstMatch(html);
-          String? imageUrl = match?.group(1)?.replaceAll('&amp;', '&');
-          diagLog.writeln("Found thumbnail via Open Graph: $imageUrl");
-
-          if (imageUrl != null) {
-            final thumbResp = await http.get(Uri.parse(imageUrl));
-            diagLog.writeln("Thumbnail download status: ${thumbResp.statusCode}");
-            if (thumbResp.statusCode == 200 && thumbResp.bodyBytes.isNotEmpty) {
-              final appDir = await getApplicationDocumentsDirectory();
-              final fileName = 'fb_thumb_${DateTime.now().millisecondsSinceEpoch}.jpg';
-              thumbPath = p.join(appDir.path, fileName);
-              await File(thumbPath).writeAsBytes(thumbResp.bodyBytes);
-              diagLog.writeln("Thumbnail saved to: $thumbPath");
-            }
-          }
-        }
-        */
-      } catch (e) { 
-        // diagLog.writeln("FB Thumbnail ERROR: $e");
       }
+    } catch (e) {
+      debugPrint("Грешка при асинхронен thumbnail: $e");
+    }
+    return null;
+  }
+
+  // Анализира споделен текст за линкове или YouTube ID и подготвя създаването на нова бележка.
+  Future<void> _handleSharedText(String text) async {
+    if (text.isEmpty) return;
+
+    String? youtubeId = _extractYoutubeId(text);
+    String? tiktokUrl = _extractTiktokUrl(text);
+    String? facebookUrl = _extractFacebookVideoUrl(text);
+    
+    Future<String?>? thumbnailFuture;
+    String title = '📝 ';
+    
+    if (youtubeId != null || tiktokUrl != null || facebookUrl != null) {
+      title = '🎬 ';
+      thumbnailFuture = _fetchNetworkThumbnailAsync(youtubeId, tiktokUrl, facebookUrl);
     } else if (text.contains('http://') || text.contains('https://') || text.contains('www.')) {
       title = '🔗 ';
     }
@@ -460,7 +435,6 @@ class _MainListScreenState extends State<MainListScreen> {
       String afterUrl = text.substring(match.end).trim();
       
       if (beforeUrl.isEmpty && afterUrl.isEmpty) {
-        // --- DEBUG --- finalContent = "$urlPart\n\n${diagLog.toString()}";
         finalContent = urlPart;
       } else if (beforeUrl.isNotEmpty && afterUrl.isEmpty) {
         if (beforeUrl.length > _maxTitleLength) {
@@ -469,35 +443,29 @@ class _MainListScreenState extends State<MainListScreen> {
         } else {
           finalTitle = '$title$beforeUrl';
           finalContent = urlPart;
-          // --- DEBUG --- finalContent += "\n\n${diagLog.toString()}";
         }
       } else if (beforeUrl.isEmpty && afterUrl.isNotEmpty) {
-        // --- DEBUG --- finalContent = '$urlPart\n$afterUrl\n\n${diagLog.toString()}';
         finalContent = '$urlPart\n$afterUrl';
       } else {
-        // Both before and after are not empty
         if (beforeUrl.length > _maxTitleLength) {
           finalTitle = title;
-          // --- DEBUG --- finalContent = '$beforeUrl\n$urlPart\n$afterUrl\n\n${diagLog.toString()}';
           finalContent = '$beforeUrl\n$urlPart\n$afterUrl';
         } else {
           finalTitle = '$title$beforeUrl';
-          // --- DEBUG --- finalContent = '$urlPart\n$afterUrl\n\n${diagLog.toString()}';
           finalContent = '$urlPart\n$afterUrl';
         }
       }
     } else {
       if (text.length > _maxTitleLength) {
         finalTitle = title;
-        // --- DEBUG --- finalContent = "$text\n\n${diagLog.toString()}";
         finalContent = text;
       } else {
         finalTitle = '$title$text';
-        // --- DEBUG --- finalContent = diagLog.toString();
         finalContent = '';
       }
     }
-    _openNoteForm(initialData: { 'content': finalContent, 'title': finalTitle, 'imagePath': thumbPath, 'id': null, 'color': null, 'isCompleted': 0, 'tags': null });
+
+    _openNoteForm(initialData: { 'content': finalContent, 'title': finalTitle, 'id': null, 'color': null, 'isCompleted': 0, 'tags': null, 'thumbnailFuture': thumbnailFuture });
   }
 
   // Обновява списъка с бележки чрез заявка към локалната база данни SQLite.

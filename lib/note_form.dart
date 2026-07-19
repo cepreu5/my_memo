@@ -34,6 +34,8 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   final _tagController = TextEditingController(); 
   final _contentFocusNode = FocusNode();
   String? _imagePath;
+  Future<String?>? _thumbnailFuture;
+  bool _isThumbnailLoading = false;
 
   DateTime? _reminderTime;
   Color _selectedColor = Colors.white;
@@ -109,6 +111,22 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       _titleController.text = widget.item!['title']?.toString() ?? "";
       _contentController.text = widget.item!['content']?.toString() ?? "";
       _imagePath = widget.item!['imagePath'];
+
+      if (widget.item!['thumbnailFuture'] != null) {
+        _isThumbnailLoading = true;
+        _thumbnailFuture = widget.item!['thumbnailFuture'] as Future<String?>;
+        _thumbnailFuture!.then((path) {
+          if (mounted) {
+            setState(() {
+              if (path != null) {
+                _imagePath = path;
+                _shouldCopyLocally = true;
+              }
+              _isThumbnailLoading = false;
+            });
+          }
+        });
+      }
 
       _isLocalCopy = widget.item!['isLocalCopy'] ?? 0;
       if (widget.item!['id'] == null && _imagePath != null && _isLocalCopy == 0) { _shouldCopyLocally = true; } else { _shouldCopyLocally = _isLocalCopy == 1; }
@@ -428,6 +446,16 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
   Future<void> _save({bool closeAfterSave = true}) async {
     _formatPricesBeforeSave();
     _reminderTime = DateTime.now(); // Автоматично обновяваме датата при всяко записване
+    
+    if (_thumbnailFuture != null) {
+      final path = await _thumbnailFuture;
+      if (path != null) {
+        _imagePath = path;
+        _shouldCopyLocally = true;
+      }
+      _thumbnailFuture = null;
+    }
+    
     String? finalPath = _imagePath;
     int finalIsLocal = _isLocalCopy;
     if (_imagePath != null && _shouldCopyLocally && _isLocalCopy == 0) {
@@ -1026,9 +1054,9 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (_imagePath != null)
+                            if (_imagePath != null || _isThumbnailLoading)
                               GestureDetector(
-                                onTap: _openFullScreenImage,
+                                onTap: _isThumbnailLoading ? null : _openFullScreenImage,
                                 child: Stack(
                                   children: [
                                     Container(
@@ -1037,10 +1065,12 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                       decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), color: Colors.black12),
                                       child: ClipRRect(
                                         borderRadius: BorderRadius.circular(12),
-                                        child: Image.file(File(_imagePath!), fit: BoxFit.contain, errorBuilder: (c, e, s) => const Icon(Icons.broken_image, size: 40, color: Colors.grey)),
+                                        child: _isThumbnailLoading
+                                            ? const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()))
+                                            : Image.file(File(_imagePath!), fit: BoxFit.contain, errorBuilder: (c, e, s) => const Icon(Icons.broken_image, size: 40, color: Colors.grey)),
                                       ),
                                     ),
-                                    if (_isEditing)
+                                    if (_isEditing && !_isThumbnailLoading)
                                       Positioned(
                                         right: 8,
                                         bottom: 8,
