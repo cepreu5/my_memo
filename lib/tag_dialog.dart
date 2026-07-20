@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'l10n/app_localizations.dart';
 
 class TagDialogHelper {
   static Color contrast(Color background, Color ifBright, Color ifDark) {
@@ -40,7 +41,7 @@ class TagDialogHelper {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (pool.isNotEmpty) ...[
-                      Text("Избери:", style: TextStyle(fontSize: 12, color: secondaryContrast)),
+                      Text(AppLocalizations.of(context)!.selectTags, style: TextStyle(fontSize: 12, color: secondaryContrast)),
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 4, runSpacing: 4,
@@ -69,7 +70,7 @@ class TagDialogHelper {
                       ),
                       const SizedBox(height: 16),
                     ],
-                    Text("Нов етикет:", style: TextStyle(fontSize: 12, color: secondaryContrast)),
+                    Text(AppLocalizations.of(context)!.newTagColon, style: TextStyle(fontSize: 12, color: secondaryContrast)),
                     Row(
                       children: [
                         Expanded(
@@ -77,7 +78,7 @@ class TagDialogHelper {
                             controller: tagController,
                             style: TextStyle(color: contrastColor, fontSize: 13),
                             decoration: InputDecoration(
-                              hintText: "Име...", 
+                              hintText: AppLocalizations.of(context)!.tagHint, 
                               hintStyle: TextStyle(color: secondaryContrast.withValues(alpha: 0.4), fontSize: 13),
                               isDense: true,
                               contentPadding: const EdgeInsets.symmetric(vertical: 8),
@@ -115,13 +116,13 @@ class TagDialogHelper {
                 ),
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(context), child: Text("Отказ", style: TextStyle(color: secondaryContrast))),
+                TextButton(onPressed: () => Navigator.pop(context), child: Text(AppLocalizations.of(context)!.cancel, style: TextStyle(color: secondaryContrast))),
                 ElevatedButton(
                   onPressed: () {
                     onSave(currentSelected);
                     Navigator.pop(context);
                   },
-                  child: Text(confirmLabel ?? 'Запази'),
+                  child: Text(confirmLabel ?? AppLocalizations.of(context)!.save),
                 ),
               ],
             );

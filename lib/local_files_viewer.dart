@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
+import 'l10n/app_localizations.dart';
 
 class LocalFilesViewerScreen extends StatefulWidget {
   const LocalFilesViewerScreen({super.key});
@@ -40,11 +41,11 @@ class _LocalFilesViewerScreenState extends State<LocalFilesViewerScreen> {
     final bool confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Изтриване на файл'),
-        content: const Text('Сигурни ли сте? Това ще изтрие физическия файл от паметта. Ако той е свързан с бележка, тя вече няма да го показва.'),
+        title: Text(AppLocalizations.of(context)!.deleteFileTitle),
+        content: Text(AppLocalizations.of(context)!.deleteFileConfirm),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отказ')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Изтрий', style: TextStyle(color: Colors.red))),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(AppLocalizations.of(context)!.cancel)),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: Text(AppLocalizations.of(context)!.delete, style: TextStyle(color: Colors.red))),
         ],
       ),
     ) ?? false;
@@ -60,7 +61,7 @@ class _LocalFilesViewerScreenState extends State<LocalFilesViewerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Файлове в паметта'),
+        title: Text(AppLocalizations.of(context)!.filesInMemory),
         actions: [
           if (_files.isNotEmpty)
             IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: _deleteCurrentFile),
@@ -69,7 +70,7 @@ class _LocalFilesViewerScreenState extends State<LocalFilesViewerScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _files.isEmpty
-              ? const Center(child: Text('Няма локални файлове.'))
+              ? Center(child: Text(AppLocalizations.of(context)!.noLocalFiles))
               : Column(
                   children: [
                     Padding(
@@ -80,7 +81,7 @@ class _LocalFilesViewerScreenState extends State<LocalFilesViewerScreen> {
                           final size = snapshot.hasData 
                               ? '${(snapshot.data! / 1024).toStringAsFixed(2)} KB' 
                               : '...';
-                          return Text('Файл ${_currentIndex + 1} от ${_files.length}\n${_files[_currentIndex].path.split('/').last}\nРазмер: $size');
+                          return Text(AppLocalizations.of(context)!.fileInfo(_currentIndex + 1, _files.length, _files[_currentIndex].path.split('/').last, size));
                         },
                       ),
                     ),
@@ -95,11 +96,11 @@ class _LocalFilesViewerScreenState extends State<LocalFilesViewerScreen> {
                       children: [
                         ElevatedButton(
                           onPressed: _currentIndex > 0 ? () => setState(() => _currentIndex--) : null,
-                          child: const Text('Предишен'),
+                          child: Text(AppLocalizations.of(context)!.previous),
                         ),
                         ElevatedButton(
                           onPressed: _currentIndex < _files.length - 1 ? () => setState(() => _currentIndex++) : null,
-                          child: const Text('Следващ'),
+                          child: Text(AppLocalizations.of(context)!.next),
                         ),
                       ],
                     ),

@@ -15,26 +15,129 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'fly_menu.dart';
+import 'l10n/app_localizations.dart';
+import 'localizations_loader.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+
+// Глобален ключ за достъп до locale без context
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 // Входна точка на приложението, която инициализира Flutter средата и зарежда стартовия екран.
 void main() {
-  // --- DEBUG ---
-  // debugPrint("APP_START: main() function has been called.");
-  final binding = WidgetsFlutterBinding.ensureInitialized();
-  FlutterNativeSplash.preserve(widgetsBinding: binding);
+  WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: WidgetsFlutterBinding.ensureInitialized());
   runApp(const BusinessOrganizerApp());
 }
 
 // Главен StatelessWidget, който конфигурира темата и задава MainListScreen за начален екран.
-class BusinessOrganizerApp extends StatelessWidget {
+class BusinessOrganizerApp extends StatefulWidget {
   const BusinessOrganizerApp({super.key});
+
+  static void setLocale(BuildContext context, Locale locale) {
+    final state = context.findAncestorStateOfType<_BusinessOrganizerAppState>();
+    state?.setLocale(locale);
+  }
+
+  @override
+  State<BusinessOrganizerApp> createState() => _BusinessOrganizerAppState();
+}
+
+class _BusinessOrganizerAppState extends State<BusinessOrganizerApp> {
+  Locale _locale = const Locale('bg');
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLocale();
+  }
+
+  Future<void> _loadLocale() async {
+    final prefs = await SharedPreferences.getInstance();
+    final langCode = prefs.getString('app_language') ?? 'bg';
+    if (mounted) {
+      setState(() => _locale = Locale(langCode));
+    }
+  }
+
+  void setLocale(Locale locale) {
+    setState(() => _locale = locale);
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.setString('app_language', locale.languageCode);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'my memo',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
+      locale: _locale,
+      localizationsDelegates: [
+        const FilesystemLocalizationDelegate(),
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('bg'),
+        Locale('en'),
+        Locale('de'),
+        Locale('fr'),
+        Locale('es'),
+        Locale('it'),
+        Locale('pt'),
+        Locale('ru'),
+        Locale('tr'),
+        Locale('el'),
+        Locale('ro'),
+        Locale('sr'),
+        Locale('hr'),
+        Locale('sl'),
+        Locale('sk'),
+        Locale('cs'),
+        Locale('pl'),
+        Locale('hu'),
+        Locale('nl'),
+        Locale('sv'),
+        Locale('da'),
+        Locale('fi'),
+        Locale('no'),
+        Locale('uk'),
+        Locale('ar'),
+        Locale('he'),
+        Locale('zh'),
+        Locale('ja'),
+        Locale('ko'),
+        Locale('vi'),
+        Locale('th'),
+        Locale('id'),
+        Locale('ms'),
+        Locale('hi'),
+        Locale('sw'),
+        Locale('af'),
+        Locale('is'),
+        Locale('ga'),
+        Locale('cy'),
+        Locale('mk'),
+        Locale('sq'),
+        Locale('bs'),
+        Locale('ka'),
+        Locale('hy'),
+        Locale('az'),
+        Locale('kk'),
+        Locale('uz'),
+        Locale('mn'),
+        Locale('ne'),
+        Locale('si'),
+        Locale('my'),
+        Locale('km'),
+        Locale('lo'),
+        Locale('eu'),
+        Locale('ca'),
+        Locale('gl'),
+      ],
       home: const MainListScreen(),
     );
   }
@@ -186,26 +289,26 @@ class _MainListScreenState extends State<MainListScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: Color(appColor),
-        title: Text('Напомняне за архивиране', style: TextStyle(color: textColor)),
-        content: Text('Последният бекъп е преди $daysSince дни. Желаете ли да архивирате данните си?', style: TextStyle(color: secondaryTextColor)),
+        title: Text(AppLocalizations.of(context)!.backupReminder, style: TextStyle(color: textColor)),
+        content: Text(AppLocalizations.of(context)!.backupReminderMessage(daysSince), style: TextStyle(color: secondaryTextColor)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Отказ', style: TextStyle(color: secondaryTextColor)),
+            child: Text(AppLocalizations.of(context)!.cancel, style: TextStyle(color: secondaryTextColor)),
           ),
           TextButton(
             onPressed: () async {
               await prefs.setString('last_backup_date', now.toIso8601String());
               if (mounted) Navigator.pop(ctx);
             },
-            child: Text('Отложи', style: TextStyle(color: secondaryTextColor)),
+            child: Text(AppLocalizations.of(context)!.postpone, style: TextStyle(color: secondaryTextColor)),
           ),
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
               Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen()));
             },
-            child: Text('Архивирай', style: TextStyle(color: Colors.blue)),
+            child: Text(AppLocalizations.of(context)!.backupNow, style: TextStyle(color: Colors.blue)),
           ),
         ],
       ),
@@ -347,7 +450,7 @@ class _MainListScreenState extends State<MainListScreen> {
         return thumbPath;
       }
     } catch (e) {
-      debugPrint("Грешка при video thumbnail: $e");
+      debugPrint("Video thumbnail error: $e");
     }
     return null;
   }
@@ -474,7 +577,7 @@ class _MainListScreenState extends State<MainListScreen> {
       final data = await dbHelper.queryAllRows();
       if (!mounted) return;
       setState(() { _allItems = data; _updateUniqueTags(); _filterItems(_searchController.text); });
-    } catch (e) { debugPrint("Грешка БД: $e"); }
+    } catch (e) { debugPrint("DB error: $e"); }
   }
 
   // Събира и поддържа списък от всички уникални етикети, използвани в наличните бележки.
@@ -555,7 +658,7 @@ class _MainListScreenState extends State<MainListScreen> {
               backgroundColor: Color(_appColor),
               title: Row(
                 children: [
-                  Text("Филтриране", style: TextStyle(color: contrastColor)),
+                  Text(AppLocalizations.of(context)!.filter, style: TextStyle(color: contrastColor)),
                   const Spacer(),
                   IconButton(icon: Icon(Icons.close, color: contrastColor), onPressed: () => Navigator.pop(ctx)),
                 ],
@@ -588,7 +691,7 @@ class _MainListScreenState extends State<MainListScreen> {
                             Expanded(
                               child: Row(
                                 children: [
-                                  Text("Период", style: TextStyle(color: contrastColor)),
+                                  Text(AppLocalizations.of(context)!.period, style: TextStyle(color: contrastColor)),
                                   if (_startDate != null) ...[
                                     const SizedBox(width: 8),
                                     Text("${_startDate!.day}.${_startDate!.month.toString().padLeft(2, '0')}-${_endDate!.day}.${_endDate!.month.toString().padLeft(2, '0')}", style: TextStyle(color: secondaryContrast, fontSize: 12)),
@@ -611,7 +714,7 @@ class _MainListScreenState extends State<MainListScreen> {
                         ),
                       ),
                     ),
-                    Row(children: [Icon(Icons.palette, color: contrastColor), const SizedBox(width: 10), Text("Цвят", style: TextStyle(color: contrastColor))]),
+                    Row(children: [Icon(Icons.palette, color: contrastColor), const SizedBox(width: 10), Text(AppLocalizations.of(context)!.color, style: TextStyle(color: contrastColor))]),
                     const SizedBox(height: 10),
                     Padding(
                       padding: const EdgeInsets.only(left: 34),
@@ -649,7 +752,7 @@ class _MainListScreenState extends State<MainListScreen> {
                           children: [
                             Icon(Icons.checklist, size: 20, color: contrastColor),
                             const SizedBox(width: 10),
-                            Expanded(child: Text("Само задачи", style: TextStyle(color: contrastColor))),
+                            Expanded(child: Text(AppLocalizations.of(context)!.tasksOnly, style: TextStyle(color: contrastColor))),
                             IconButton(
                               visualDensity: VisualDensity.compact,
                               padding: EdgeInsets.zero,
@@ -679,7 +782,7 @@ class _MainListScreenState extends State<MainListScreen> {
                           children: [
                             Icon(Icons.format_list_numbered, color: contrastColor),
                             const SizedBox(width: 10),
-                            Expanded(child: Text("Последователен ред", style: TextStyle(color: contrastColor))),
+                            Expanded(child: Text(AppLocalizations.of(context)!.sequentialOrder, style: TextStyle(color: contrastColor))),
                             IconButton(
                               visualDensity: VisualDensity.compact,
                               padding: EdgeInsets.zero,
@@ -713,7 +816,7 @@ class _MainListScreenState extends State<MainListScreen> {
                           children: [
                             Icon(Icons.sort, color: contrastColor),
                             const SizedBox(width: 10),
-                            Expanded(child: Text("Обратно подреждане", style: TextStyle(color: contrastColor))),
+                            Expanded(child: Text(AppLocalizations.of(context)!.reverseOrder, style: TextStyle(color: contrastColor))),
                             Checkbox(
                               visualDensity: VisualDensity.compact,
                               value: _reverseOrder,
@@ -750,8 +853,8 @@ class _MainListScreenState extends State<MainListScreen> {
                   });
                   _filterItems(_searchController.text);
                   navigator.pop();
-                }, child: Text("Изчисти всички", style: TextStyle(color: secondaryContrast))),
-                ElevatedButton(onPressed: () => Navigator.pop(ctx), child: const Text("Готово")),
+                }, child: Text(AppLocalizations.of(context)!.clearAll, style: TextStyle(color: secondaryContrast))),
+                ElevatedButton(onPressed: () => Navigator.pop(ctx), child: Text(AppLocalizations.of(context)!.done)),
               ],
             );
           },
@@ -777,14 +880,14 @@ class _MainListScreenState extends State<MainListScreen> {
             });
             return AlertDialog(
               backgroundColor: Color(_appColor),
-              title: Text('Етикети за "${item['title'] ?? 'Бележка'}"', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: contrastColor)),
+              title: Text(AppLocalizations.of(context)!.tagsForNote(item['title'] ?? AppLocalizations.of(context)!.note), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: contrastColor)),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (allTags.isNotEmpty) ...[
-                      Text("Избери:", style: TextStyle(fontSize: 12, color: secondaryContrast)),
+                      Text(AppLocalizations.of(context)!.selectTags, style: TextStyle(fontSize: 12, color: secondaryContrast)),
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 4, runSpacing: 4,
@@ -813,7 +916,7 @@ class _MainListScreenState extends State<MainListScreen> {
                       ),
                       const SizedBox(height: 16),
                     ],
-                    Text("Нов етикет:", style: TextStyle(fontSize: 12, color: secondaryContrast)),
+                    Text(AppLocalizations.of(context)!.newTag, style: TextStyle(fontSize: 12, color: secondaryContrast)),
                     Row(
                       children: [
                         Expanded(
@@ -821,7 +924,7 @@ class _MainListScreenState extends State<MainListScreen> {
                             controller: _tagController,
                             style: TextStyle(color: contrastColor, fontSize: 13),
                             decoration: InputDecoration(
-                              hintText: "Име...", 
+                              hintText: AppLocalizations.of(context)!.tagHint, 
                               hintStyle: TextStyle(color: secondaryContrast.withValues(alpha: 0.4), fontSize: 13),
                               isDense: true,
                               contentPadding: const EdgeInsets.symmetric(vertical: 8),
@@ -851,7 +954,7 @@ class _MainListScreenState extends State<MainListScreen> {
                 ),
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(context), child: Text("Отказ", style: TextStyle(color: secondaryContrast))),
+                TextButton(onPressed: () => Navigator.pop(context), child: Text(AppLocalizations.of(context)!.cancel, style: TextStyle(color: secondaryContrast))),
                 ElevatedButton(
                   onPressed: () async {
                     Map<String, dynamic> updatedItem = Map.from(item);
@@ -860,7 +963,7 @@ class _MainListScreenState extends State<MainListScreen> {
                     _refreshItems();
                     if (context.mounted) Navigator.pop(context);
                   },
-                  child: const Text('Запази'),
+                  child: Text(AppLocalizations.of(context)!.save),
                 ),
               ],
             );
@@ -886,9 +989,9 @@ class _MainListScreenState extends State<MainListScreen> {
             });
             return AlertDialog(
               backgroundColor: Color(_appColor),
-              title: Text('Филтър по етикети', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: contrastColor)),
+              title: Text(AppLocalizations.of(context)!.tagFilterTitle, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: contrastColor)),
               content: allTags.isEmpty 
-                ? Padding(padding: const EdgeInsets.all(20), child: Text('Няма налични етикети.', style: TextStyle(color: secondaryContrast)))
+                ? Padding(padding: const EdgeInsets.all(20), child: Text(AppLocalizations.of(context)!.noTagsAvailable, style: TextStyle(color: secondaryContrast)))
                 : SingleChildScrollView(
                     child: Wrap(
                       spacing: 4, runSpacing: 4,
@@ -924,9 +1027,9 @@ class _MainListScreenState extends State<MainListScreen> {
                     setState(() { _selectedFilterTags.clear(); _filterItems(_searchController.text); });
                     setModalState(() {});
                   },
-                  child: const Text('Изчисти', style: TextStyle(color: Colors.redAccent)),
+                  child: Text(AppLocalizations.of(context)!.clear, style: TextStyle(color: Colors.redAccent)),
                 ),
-                ElevatedButton(onPressed: () => Navigator.pop(ctx), child: const Text("Готово")),
+                ElevatedButton(onPressed: () => Navigator.pop(ctx), child: Text(AppLocalizations.of(context)!.done)),
               ],
             );
           },
@@ -1033,7 +1136,7 @@ class _MainListScreenState extends State<MainListScreen> {
                   },
                   style: TextStyle(color: appBarTextColor),
                   decoration: InputDecoration(
-                    hintText: 'Търсене...',
+                    hintText: AppLocalizations.of(context)!.searchHint,
                     hintStyle: TextStyle(color: appBarTextColor.withValues(alpha: 0.6)),
                     prefixIcon: textEditingController.text.isNotEmpty 
                       ? IconButton(
@@ -1182,7 +1285,7 @@ class _MainListScreenState extends State<MainListScreen> {
                 ),
                 Expanded(
                   child: _filteredItems.isEmpty
-                      ? Center(child: Text('Няма открити бележки.', style: TextStyle(color: appBarTextColor)))
+                      ? Center(child: Text(AppLocalizations.of(context)!.noNotesFound, style: TextStyle(color: appBarTextColor)))
                       : _isGridView ? _buildGrid() : _buildList(),
                 ),
               ],
@@ -1193,16 +1296,16 @@ class _MainListScreenState extends State<MainListScreen> {
                   if (_mainScrollController.hasClients) {
                     _mainScrollController.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
                   }
-                }, label: "Нагоре"),
-                FlyAction(icon: _isGridView ? Icons.view_list : Icons.grid_view, onTap: _toggleView, label: "Изглед"),
+                }, label: AppLocalizations.of(context)!.scrollUp),
+                FlyAction(icon: _isGridView ? Icons.view_list : Icons.grid_view, onTap: _toggleView, label: AppLocalizations.of(context)!.viewToggle),
                 if (_searchController.text.isNotEmpty)
                   FlyAction(
                     icon: Icons.search_off,
                     onTap: () { _searchController.clear(); _filterItems(''); FocusScope.of(context).unfocus(); },
-                    label: "Без търсене",
+                    label: AppLocalizations.of(context)!.clearSearch,
                   ),
-                FlyAction(icon: Icons.filter_list, onTap: _showFilterDialog, label: "Филтри"),
-                FlyAction(icon: Icons.label_outline, onTap: _showGlobalTagsModal, label: "Етикети"),
+                FlyAction(icon: Icons.filter_list, onTap: _showFilterDialog, label: AppLocalizations.of(context)!.filters),
+                FlyAction(icon: Icons.label_outline, onTap: _showGlobalTagsModal, label: AppLocalizations.of(context)!.tags),
                 if (_selectedFilterTags.isNotEmpty || _startDate != null || _filterColor != null || _filterTasksOnly || _reverseOrder || _sortById)
                   FlyAction(
                     icon: Icons.label_off_outlined,
@@ -1222,16 +1325,16 @@ class _MainListScreenState extends State<MainListScreen> {
                       });
                       _filterItems(_searchController.text);
                     },
-                    label: "Без филтри",
+                    label: AppLocalizations.of(context)!.clearFilters,
                   ),
-                FlyAction(icon: Icons.add, onTap: () => _openNoteForm(), label: "Нова бележка"),
-                FlyAction(icon: Icons.settings, onTap: _goToSettings, label: "Настройки"),
+                FlyAction(icon: Icons.add, onTap: () => _openNoteForm(), label: AppLocalizations.of(context)!.addNote),
+                FlyAction(icon: Icons.settings, onTap: _goToSettings, label: AppLocalizations.of(context)!.settings),
               ],
             ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(onPressed: () => _openNoteForm(), tooltip: 'Нова бележка', child: const Icon(Icons.add)),
+      floatingActionButton: FloatingActionButton(onPressed: () => _openNoteForm(), tooltip: AppLocalizations.of(context)!.addNote, child: const Icon(Icons.add)),
     );
   }
 
@@ -1409,11 +1512,11 @@ class _MainListScreenState extends State<MainListScreen> {
           if (!_confirmDelete) return true;
           return await showDialog<bool>(context: context, builder: (c) => AlertDialog(
             backgroundColor: Color(_appColor),
-            title: Text('Потвърждение', style: TextStyle(color: _contrast(Color(_appColor), Colors.black, Colors.white))), 
-            content: Text('Сигурни ли сте, че искате да изтриете тази бележка?', style: TextStyle(color: _contrast(Color(_appColor), Colors.black87, Colors.white70))), 
+            title: Text(AppLocalizations.of(context)!.confirm, style: TextStyle(color: _contrast(Color(_appColor), Colors.black, Colors.white))), 
+            content: Text(AppLocalizations.of(context)!.confirmDeleteNote, style: TextStyle(color: _contrast(Color(_appColor), Colors.black87, Colors.white70))), 
             actions: [
-              TextButton(onPressed: () => Navigator.pop(c, false), child: Text('Отказ', style: TextStyle(color: _contrast(Color(_appColor), Colors.black54, Colors.white60)))), 
-              TextButton(onPressed: () => Navigator.pop(c, true), child: Text('Изтриване', style: TextStyle(color: _contrast(Color(_appColor), Colors.black54, Colors.white60))))
+              TextButton(onPressed: () => Navigator.pop(c, false), child: Text(AppLocalizations.of(context)!.cancel, style: TextStyle(color: _contrast(Color(_appColor), Colors.black54, Colors.white60)))), 
+              TextButton(onPressed: () => Navigator.pop(c, true), child: Text(AppLocalizations.of(context)!.delete, style: TextStyle(color: _contrast(Color(_appColor), Colors.black54, Colors.white60))))
             ]
           )) ?? false;
         },

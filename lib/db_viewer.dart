@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'db_helper.dart';
+import 'l10n/app_localizations.dart';
 
 class DbViewerScreen extends StatefulWidget {
   const DbViewerScreen({super.key});
@@ -45,7 +46,7 @@ class _DbViewerScreenState extends State<DbViewerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Контрол на БД'),
+        title: Text(AppLocalizations.of(context)!.databaseTitle),
         actions: [
           if (_records.isNotEmpty)
             IconButton(
@@ -57,20 +58,20 @@ class _DbViewerScreenState extends State<DbViewerScreen> {
                 final bool isLocal = record['isLocalCopy'] == 1;
 
 
-                String contentText = 'Сигурни ли сте, че искате да изтриете този запис?';
+                String contentText = AppLocalizations.of(context)!.confirmDeleteRecord;
                 if (isLocal && imagePath != null) {
-                  contentText += '\n\nВнимание: Локалното копие на файла (${imagePath.split('/').last}) също ще бъде изтрито от паметта на приложението.';
+                  contentText += '\n\n${AppLocalizations.of(context)!.localFileWarning(imagePath.split('/').last)}';
                 }
                 final bool confirm = await showDialog<bool>(
                   context: context,
                   builder: (context) => AlertDialog(
-                    title: const Text('Потвърждение'),
+                    title: Text(AppLocalizations.of(context)!.confirm),
                     content: Text(contentText),
                     actions: [
-                      TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отказ')),
+                      TextButton(onPressed: () => Navigator.pop(context, false), child: Text(AppLocalizations.of(context)!.cancel)),
                       TextButton(
                         onPressed: () => Navigator.pop(context, true),
-                        child: const Text('Изтрий', style: TextStyle(color: Colors.red)),
+                        child: Text(AppLocalizations.of(context)!.delete, style: TextStyle(color: Colors.red)),
                       ),
                     ],
                   ),
@@ -97,20 +98,20 @@ class _DbViewerScreenState extends State<DbViewerScreen> {
                   }
                 }
               },
-              tooltip: 'Изтрий записа от БД',
+              tooltip: AppLocalizations.of(context)!.deleteRecordTooltip,
             ),
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _records.isEmpty
-              ? const Center(child: Text('Базата данни е празна.'))
+              ? Center(child: Text(AppLocalizations.of(context)!.databaseEmpty))
               : Column(
                   children: [
                     Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Text(
-                        'Запис ${_currentIndex + 1} от ${_records.length}',
+                        AppLocalizations.of(context)!.recordInfo(_currentIndex + 1, _records.length),
                         style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                     ),
@@ -127,7 +128,7 @@ class _DbViewerScreenState extends State<DbViewerScreen> {
                             children: [
                               Image.file(
                                 File(_records[_currentIndex]['imagePath']),
-                                errorBuilder: (context, error, stackTrace) => const Center(child: Text("Файлът не е намерен")),
+                                errorBuilder: (context, error, stackTrace) => Center(child: Text(AppLocalizations.of(context)!.fileNotFound)),
                               ),
                             ],
                           ),
@@ -153,12 +154,12 @@ class _DbViewerScreenState extends State<DbViewerScreen> {
                         ElevatedButton.icon(
                           onPressed: _currentIndex > 0 ? _prev : null,
                           icon: const Icon(Icons.arrow_back),
-                          label: const Text('Предишен'),
+                          label: Text(AppLocalizations.of(context)!.previous),
                         ),
                         ElevatedButton.icon(
                           onPressed: _currentIndex < _records.length - 1 ? _next : null,
                           icon: const Icon(Icons.arrow_forward),
-                          label: const Text('Следващ'),
+                          label: Text(AppLocalizations.of(context)!.next),
                           iconAlignment: IconAlignment.end,
                         ),
                       ],

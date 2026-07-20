@@ -8,6 +8,11 @@ import 'db_viewer.dart';
 import 'fly_menu.dart';
 import 'local_files_viewer.dart';
 import 'google_drive_helper.dart';
+import 'l10n/app_localizations.dart';
+import 'translation_screen.dart';
+import 'translation_editor_screen.dart';
+import 'translation_service.dart';
+import 'main.dart' show BusinessOrganizerApp;
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -34,6 +39,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _alignmentColumn = 30;
   int _gridWidthOffset = 10;
   int _backupPeriodDays = 0;
+  String _currentLanguage = 'bg';
   final TextEditingController _listLinesController = TextEditingController();
   final TextEditingController _gridLinesController = TextEditingController();
   final TextEditingController _listColumnsController = TextEditingController();
@@ -79,7 +85,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (success) {
       await _checkGoogleAccount();
     } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Неуспешно влизане в Google акаунт')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.signInFailed)));
     }
   }
 
@@ -103,11 +109,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           context: context,
           builder: (ctx) => AlertDialog(
             backgroundColor: Color(_appBgColor),
-            title: Text('Намерени са $orphanCount неизползвани снимки', style: TextStyle(color: _textColor)),
-            content: Text('Тези снимки не са свързани с никоя бележка. Да бъдат ли изчистени преди архивирането?', style: TextStyle(color: _secondaryTextColor)),
+            title: Text(AppLocalizations.of(context)!.orphanedImagesFound(orphanCount), style: TextStyle(color: _textColor)),
+            content: Text(AppLocalizations.of(context)!.orphanedImagesDesc, style: TextStyle(color: _secondaryTextColor)),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Не', style: TextStyle(color: _secondaryTextColor))),
-              TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Да, изчисти', style: TextStyle(color: Colors.red))),
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppLocalizations.of(context)!.no, style: TextStyle(color: _secondaryTextColor))),
+              TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(AppLocalizations.of(context)!.cleanOrphans, style: TextStyle(color: Colors.red))),
             ],
           ),
         ) ?? false;
@@ -116,14 +122,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final success = await _driveHelper.backupToDrive();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(success ? 'Архивирането е успешно!' : 'Грешка при архивиране'),
+          content: Text(success ? AppLocalizations.of(context)!.backupSuccess : AppLocalizations.of(context)!.backupError),
           backgroundColor: success ? Colors.green : Colors.red,
         ));
       }
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('last_backup_date', DateTime.now().toIso8601String());
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Грешка: $e'), backgroundColor: Colors.red));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.genericError(e.toString())), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() => _isBackingUp = false);
     }
@@ -137,16 +143,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (mounted) {
         if (path != null) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: const Text('Архивът е записан в папка\nИзтегляния/my_memo_backups', style: TextStyle(fontSize: 12)),
+            content: Text(AppLocalizations.of(context)!.localBackupSaved, style: TextStyle(fontSize: 12)),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 5),
           ));
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Грешка при записване'), backgroundColor: Colors.red));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.localBackupError), backgroundColor: Colors.red));
         }
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Грешка: $e'), backgroundColor: Colors.red));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.genericError(e.toString())), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() => _isSavingLocal = false);
     }
@@ -159,7 +165,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final localBackups = _driveHelper.listLocalBackups();
       if (!mounted) return;
       if (localBackups.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Няма намерени локални архиви в Downloads'), backgroundColor: Colors.orange));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.noLocalArchivesInDownloads), backgroundColor: Colors.orange));
         setState(() => _isRestoringLocal = false);
         return;
       }
@@ -168,7 +174,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         builder: (ctx) => AlertDialog(
           backgroundColor: Color(_appBgColor),
           insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-          title: Text('Избор на архив', style: TextStyle(color: _textColor)),
+          title: Text(AppLocalizations.of(context)!.selectArchive, style: TextStyle(color: _textColor)),
           contentPadding: EdgeInsets.zero,
           content: StatefulBuilder(
             builder: (ctx, setDialogState) => SizedBox(
@@ -197,11 +203,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           context: context,
                           builder: (d) => AlertDialog(
                             backgroundColor: Color(_appBgColor),
-                            title: Text('Изтриване', style: TextStyle(color: _textColor)),
-                            content: Text('Изтрий $name?', style: TextStyle(color: _secondaryTextColor)),
+                            title: Text(AppLocalizations.of(context)!.deleting, style: TextStyle(color: _textColor)),
+                            content: Text(AppLocalizations.of(context)!.deleteFileConfirmName(name), style: TextStyle(color: _secondaryTextColor)),
                             actions: [
-                              TextButton(onPressed: () => Navigator.pop(d, false), child: Text('Отказ', style: TextStyle(color: _secondaryTextColor))),
-                              TextButton(onPressed: () => Navigator.pop(d, true), child: const Text('Изтрий', style: TextStyle(color: Colors.red))),
+                              TextButton(onPressed: () => Navigator.pop(d, false), child: Text(AppLocalizations.of(context)!.cancel, style: TextStyle(color: _secondaryTextColor))),
+                              TextButton(onPressed: () => Navigator.pop(d, true), child: Text(AppLocalizations.of(context)!.delete, style: TextStyle(color: Colors.red))),
                             ],
                           ),
                         ) ?? false;
@@ -217,7 +223,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Отказ', style: TextStyle(color: _secondaryTextColor))),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppLocalizations.of(context)!.cancel, style: TextStyle(color: _secondaryTextColor))),
           ],
         ),
       );
@@ -229,11 +235,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: Color(_appBgColor),
-          title: Text('Възстановяване', style: TextStyle(color: _textColor)),
-          content: Text('Това ще замести всички текущи бележки с данни от архива. Продължи?', style: TextStyle(color: _secondaryTextColor)),
+          title: Text(AppLocalizations.of(context)!.restoreTitle, style: TextStyle(color: _textColor)),
+          content: Text(AppLocalizations.of(context)!.restoreConfirm, style: TextStyle(color: _secondaryTextColor)),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Отказ', style: TextStyle(color: _secondaryTextColor))),
-            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Възстанови', style: TextStyle(color: Colors.blue))),
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppLocalizations.of(context)!.cancel, style: TextStyle(color: _secondaryTextColor))),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(AppLocalizations.of(context)!.restore, style: TextStyle(color: Colors.blue))),
           ],
         ),
       ) ?? false;
@@ -244,13 +250,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final success = await _driveHelper.restoreFromLocal(selectedPath);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(success ? 'Възстановяването е успешно!' : 'Грешка при възстановяване'),
+          content: Text(success ? AppLocalizations.of(context)!.restoreSuccess : AppLocalizations.of(context)!.restoreError),
           backgroundColor: success ? Colors.green : Colors.red,
         ));
         if (success) Navigator.pop(context);
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Грешка: $e'), backgroundColor: Colors.red));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.genericError(e.toString())), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() => _isRestoringLocal = false);
     }
@@ -267,7 +273,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final backups = await _driveHelper.listBackups();
       if (!mounted) return;
       if (backups.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Няма намерени архиви в Google Drive'), backgroundColor: Colors.orange));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.noGoogleDriveBackups), backgroundColor: Colors.orange));
         setState(() => _isRestoring = false);
         return;
       }
@@ -276,13 +282,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         builder: (ctx) => AlertDialog(
           backgroundColor: Color(_appBgColor),
           insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-          title: Text('Избор на архив', style: TextStyle(color: _textColor)),
+          title: Text(AppLocalizations.of(context)!.selectArchive, style: TextStyle(color: _textColor)),
           contentPadding: EdgeInsets.zero,
           content: StatefulBuilder(
             builder: (ctx, setDialogState) => SizedBox(
               width: MediaQuery.of(context).size.width * 0.95,
               child: backups.isEmpty
-                  ? const Center(child: Text('Няма архиви'))
+                  ? Center(child: Text(AppLocalizations.of(context)!.noArchives))
                   : ListView.builder(
                       shrinkWrap: true,
                       padding: EdgeInsets.zero,
@@ -308,11 +314,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 context: context,
                                 builder: (d) => AlertDialog(
                                   backgroundColor: Color(_appBgColor),
-                                  title: Text('Изтриване', style: TextStyle(color: _textColor)),
-                                  content: Text('Изтрий архива ${backup['name']}?', style: TextStyle(color: _secondaryTextColor)),
+                                  title: Text(AppLocalizations.of(context)!.deleting, style: TextStyle(color: _textColor)),
+                                  content: Text(AppLocalizations.of(context)!.deleteBackupConfirmName(backup['name']!), style: TextStyle(color: _secondaryTextColor)),
                                   actions: [
-                                    TextButton(onPressed: () => Navigator.pop(d, false), child: Text('Отказ', style: TextStyle(color: _secondaryTextColor))),
-                                    TextButton(onPressed: () => Navigator.pop(d, true), child: const Text('Изтрий', style: TextStyle(color: Colors.red))),
+                                    TextButton(onPressed: () => Navigator.pop(d, false), child: Text(AppLocalizations.of(context)!.cancel, style: TextStyle(color: _secondaryTextColor))),
+                                    TextButton(onPressed: () => Navigator.pop(d, true), child: Text(AppLocalizations.of(context)!.delete, style: TextStyle(color: Colors.red))),
                                   ],
                                 ),
                               ) ?? false;
@@ -328,7 +334,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Отказ', style: TextStyle(color: _secondaryTextColor))),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppLocalizations.of(context)!.cancel, style: TextStyle(color: _secondaryTextColor))),
           ],
         ),
       );
@@ -340,11 +346,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: Color(_appBgColor),
-          title: Text('Възстановяване', style: TextStyle(color: _textColor)),
-          content: Text('Това ще замести всички текущи бележки с данни от архива. Продължи?', style: TextStyle(color: _secondaryTextColor)),
+          title: Text(AppLocalizations.of(context)!.restoreTitle, style: TextStyle(color: _textColor)),
+          content: Text(AppLocalizations.of(context)!.restoreConfirm, style: TextStyle(color: _secondaryTextColor)),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Отказ', style: TextStyle(color: _secondaryTextColor))),
-            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Възстанови', style: TextStyle(color: Colors.blue))),
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppLocalizations.of(context)!.cancel, style: TextStyle(color: _secondaryTextColor))),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(AppLocalizations.of(context)!.restore, style: TextStyle(color: Colors.blue))),
           ],
         ),
       ) ?? false;
@@ -355,13 +361,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final success = await _driveHelper.restoreFromDrive(fileId: selectedId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(success ? 'Възстановяването е успешно!' : 'Грешка при възстановяване'),
+          content: Text(success ? AppLocalizations.of(context)!.restoreSuccess : AppLocalizations.of(context)!.restoreError),
           backgroundColor: success ? Colors.green : Colors.red,
         ));
         if (success) Navigator.pop(context);
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Грешка: $e'), backgroundColor: Colors.red));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.genericError(e.toString())), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() => _isRestoring = false);
     }
@@ -399,6 +405,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _alignmentColumn = prefs.getInt('alignment_column') ?? 30;
       _gridWidthOffset = prefs.getInt('grid_width_offset') ?? 10;
       _backupPeriodDays = prefs.getInt('backup_period_days') ?? 0;
+      _currentLanguage = prefs.getString('app_language') ?? 'bg';
       final customList = prefs.getStringList('custom_palette') ?? [];
       _customPalette = customList.map((s) => Color(int.parse(s))).toList();
       if (updateControllers) {
@@ -459,11 +466,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: Image.asset('assets/app_icon_0.png', fit: BoxFit.contain),
         ),
         leadingWidth: 46,
-        title: Text('Настройки', style: TextStyle(color: _textColor)),
+        title: Text(AppLocalizations.of(context)!.settings, style: TextStyle(color: _textColor)),
         automaticallyImplyLeading: false,
         actions: [
-          IconButton(icon: const Icon(Icons.close, color: Colors.red), onPressed: _revertAndExit, tooltip: 'Отказ'),
-          IconButton(icon: const Icon(Icons.check, color: Colors.green), onPressed: _saveAllSettings, tooltip: 'Потвърждение'),
+          IconButton(icon: const Icon(Icons.close, color: Colors.red), onPressed: _revertAndExit, tooltip: AppLocalizations.of(context)!.cancel),
+          IconButton(icon: const Icon(Icons.check, color: Colors.green), onPressed: _saveAllSettings, tooltip: AppLocalizations.of(context)!.confirm),
         ],
       ),
       body: Stack(
@@ -471,52 +478,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListView(
             padding: const EdgeInsets.fromLTRB(10, 10, 5, 10),
             children: [
-              _buildSectionTitle('Фон на приложението'),
+              _buildSectionTitle(AppLocalizations.of(context)!.appBackground),
               const SizedBox(height: 10),
               _buildColorPicker(selectedColor: _appBgColor, onColorSelected: (color) => setState(() => _appBgColor = color.toARGB32())),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
-              _buildSectionTitle('Фон на бележките'),
+              _buildSectionTitle(AppLocalizations.of(context)!.noteBackground),
               const SizedBox(height: 10),
               _buildColorPicker(selectedColor: _defaultNoteColor, onColorSelected: (color) => setState(() => _defaultNoteColor = color.toARGB32())),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
-              _buildSectionTitle('Списък'),
-              _buildNumberInput(title: 'Брой колони', controller: _listColumnsController, min: 1, max: 10, onChanged: (val) => setState(() => _listColumns = val)),
-              _buildNumberInput(title: 'Брой редове текст', controller: _listLinesController, min: 1, max: 20, onChanged: (val) => setState(() => _maxLinesList = val)),
-              _buildSectionTitle('Матрица'),
-              _buildNumberInput(title: 'Брой колони', controller: _gridColumnsController, min: 1, max: 10, onChanged: (val) => setState(() => _gridColumns = val)),
-              _buildNumberInput(title: 'Брой редове текст', controller: _gridLinesController, min: 1, max: 20, onChanged: (val) => setState(() => _maxLinesGrid = val)),
-              _buildSwitchInput(title: 'Компактен вид', value: _compactGridView, onChanged: (val) => setState(() => _compactGridView = val)),
-              _buildNumberInput(title: 'Таб стоп', controller: _gridWidthOffsetController, min: 0, max: 50, onChanged: (val) => setState(() => _gridWidthOffset = val)),
+              _buildSectionTitle(AppLocalizations.of(context)!.listView),
+              _buildNumberInput(title: AppLocalizations.of(context)!.columns, controller: _listColumnsController, min: 1, max: 10, onChanged: (val) => setState(() => _listColumns = val)),
+              _buildNumberInput(title: AppLocalizations.of(context)!.textLines, controller: _listLinesController, min: 1, max: 20, onChanged: (val) => setState(() => _maxLinesList = val)),
+              _buildSectionTitle(AppLocalizations.of(context)!.gridView),
+              _buildNumberInput(title: AppLocalizations.of(context)!.columns, controller: _gridColumnsController, min: 1, max: 10, onChanged: (val) => setState(() => _gridColumns = val)),
+              _buildNumberInput(title: AppLocalizations.of(context)!.textLines, controller: _gridLinesController, min: 1, max: 20, onChanged: (val) => setState(() => _maxLinesGrid = val)),
+              _buildSwitchInput(title: AppLocalizations.of(context)!.compactView, value: _compactGridView, onChanged: (val) => setState(() => _compactGridView = val)),
+              _buildNumberInput(title: AppLocalizations.of(context)!.tabStop, controller: _gridWidthOffsetController, min: 0, max: 50, onChanged: (val) => setState(() => _gridWidthOffset = val)),
               const SizedBox(height: 10),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
-              _buildSectionTitle('Бележки на основния екран'),
-              _buildNumberInput(title: 'Размер шрифт заглавие', controller: _listTitleSizeController, min: 10, max: 30, onChanged: (val) => setState(() => _fontSizeListTitle = val.toDouble())),
-              _buildNumberInput(title: 'Размер шрифт текст', controller: _listContentSizeController, min: 8, max: 25, onChanged: (val) => setState(() => _fontSizeListContent = val.toDouble())),
-              _buildSwitchInput(title: 'Показване на датата', value: _showDate, onChanged: (val) => setState(() => _showDate = val)),
+              _buildSectionTitle(AppLocalizations.of(context)!.fontSizeTitle),
+              _buildNumberInput(title: AppLocalizations.of(context)!.fontSizeTitle, controller: _listTitleSizeController, min: 10, max: 30, onChanged: (val) => setState(() => _fontSizeListTitle = val.toDouble())),
+              _buildNumberInput(title: AppLocalizations.of(context)!.fontSizeContent, controller: _listContentSizeController, min: 8, max: 25, onChanged: (val) => setState(() => _fontSizeListContent = val.toDouble())),
+              _buildSwitchInput(title: AppLocalizations.of(context)!.showDate, value: _showDate, onChanged: (val) => setState(() => _showDate = val)),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
-              _buildSectionTitle('Редактор'),
-              _buildNumberInput(title: 'Размер шрифт заглавие', controller: _formTitleSizeController, min: 14, max: 40, onChanged: (val) => setState(() => _fontSizeFormTitle = val.toDouble())),
-              _buildNumberInput(title: 'Размер шрифт текст', controller: _formContentSizeController, min: 10, max: 35, onChanged: (val) => setState(() => _fontSizeFormContent = val.toDouble())),
-              _buildNumberInput(title: 'Подравняване в колона', controller: _alignmentColumnController, min: 10, max: 100, onChanged: (val) => setState(() => _alignmentColumn = val)),
+              _buildSectionTitle(AppLocalizations.of(context)!.editor),
+              _buildNumberInput(title: AppLocalizations.of(context)!.fontSizeTitle, controller: _formTitleSizeController, min: 14, max: 40, onChanged: (val) => setState(() => _fontSizeFormTitle = val.toDouble())),
+              _buildNumberInput(title: AppLocalizations.of(context)!.fontSizeContent, controller: _formContentSizeController, min: 10, max: 35, onChanged: (val) => setState(() => _fontSizeFormContent = val.toDouble())),
+              _buildNumberInput(title: AppLocalizations.of(context)!.alignmentColumn, controller: _alignmentColumnController, min: 10, max: 100, onChanged: (val) => setState(() => _alignmentColumn = val)),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
-              _buildSectionTitle('Филтриране по етикети'),
+              _buildSectionTitle(AppLocalizations.of(context)!.tagFilter),
               _buildSwitchInput(
-                title: _filterMatchAll ? 'ВСИЧКИ избрани' : 'ПОНЕ ЕДИН от избраните',
+                title: _filterMatchAll ? AppLocalizations.of(context)!.filterMatchAll : AppLocalizations.of(context)!.filterMatchAny,
                 value: _filterMatchAll,
                 onChanged: (val) => setState(() => _filterMatchAll = val),
               ),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
-              _buildSectionTitle('Потвърждение при изтриване'),
+              _buildSectionTitle(AppLocalizations.of(context)!.confirmDelete),
               _buildSwitchInput(
-                title: _confirmDelete ? 'Включено' : 'Изключено',
+                title: _confirmDelete ? AppLocalizations.of(context)!.enabled : AppLocalizations.of(context)!.disabled,
                 value: _confirmDelete,
                 onChanged: (val) => setState(() => _confirmDelete = val),
               ),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
-              _buildSectionTitle('Споделяне'),
-              _buildNumberInput(title: 'Дължина на заглавие', controller: _maxTitleLengthController, min: 10, max: 500, onChanged: (val) => setState(() => _maxTitleLength = val)),
+              _buildSectionTitle(AppLocalizations.of(context)!.sharing),
+              _buildNumberInput(title: AppLocalizations.of(context)!.maxTitleLength, controller: _maxTitleLengthController, min: 10, max: 500, onChanged: (val) => setState(() => _maxTitleLength = val)),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
-              _buildSectionTitle('Архивиране в Google Drive'),
+              _buildSectionTitle(AppLocalizations.of(context)!.googleDriveBackup),
               if (_googleAccountEmail != null) ...[
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -541,7 +548,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     children: [
                       Icon(Icons.account_circle_outlined, size: 18, color: _secondaryTextColor),
                       const SizedBox(width: 8),
-                      Text('Няма свързан акаунт', style: TextStyle(fontSize: 12, color: _secondaryTextColor)),
+                      Text(AppLocalizations.of(context)!.noAccount, style: TextStyle(fontSize: 12, color: _secondaryTextColor)),
                       const Spacer(),
                       IconButton(
                         icon: Icon(Icons.login, size: 18, color: _textColor),
@@ -553,10 +560,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
               ],
-              _buildNumberInput(title: 'Напомняне (дни)', controller: _backupPeriodController, min: 0, max: 365, onChanged: (val) => setState(() => _backupPeriodDays = val)),
+              _buildNumberInput(title: AppLocalizations.of(context)!.backupReminder, controller: _backupPeriodController, min: 0, max: 365, onChanged: (val) => setState(() => _backupPeriodDays = val)),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                child: Text(_backupPeriodDays == 0 ? 'Изключено' : 'Напомняне на всеки $_backupPeriodDays дни', style: TextStyle(fontSize: 11, color: _secondaryTextColor)),
+                child: Text(_backupPeriodDays == 0 ? AppLocalizations.of(context)!.backupPeriodNone : AppLocalizations.of(context)!.localBackupReminder(_backupPeriodDays), style: TextStyle(fontSize: 11, color: _secondaryTextColor)),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -572,7 +579,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         child: _isBackingUp
                             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.cloud_upload, size: 16), SizedBox(width: 4), Text('Архивирай')]),
+                            : Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.cloud_upload, size: 16), SizedBox(width: 4), Text(AppLocalizations.of(context)!.backupNow)]),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -586,14 +593,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         child: _isRestoring
                             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.cloud_download, size: 16), SizedBox(width: 4), Text('Възстанови')]),
+                            : Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.cloud_download, size: 16), SizedBox(width: 4), Text(AppLocalizations.of(context)!.restoreNow)]),
                       ),
                     ),
                   ],
                 ),
               ),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
-              _buildSectionTitle('Локален архив'),
+              _buildSectionTitle(AppLocalizations.of(context)!.localBackup),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 child: Row(
@@ -608,7 +615,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         child: _isSavingLocal
                             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.save_alt, size: 16), SizedBox(width: 4), Text('Архивирай')]),
+                            : Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.save_alt, size: 16), SizedBox(width: 4), Text(AppLocalizations.of(context)!.backupNow)]),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -622,32 +629,74 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         child: _isRestoringLocal
                             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.restore, size: 16), SizedBox(width: 4), Text('Възстанови')]),
+                            : Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.restore, size: 16), SizedBox(width: 4), Text(AppLocalizations.of(context)!.restoreNow)]),
                       ),
                     ),
                   ],
                 ),
               ),
               Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
+              _buildSectionTitle(AppLocalizations.of(context)!.settings),
+              // Language selector
+              ListTile(
+                leading: Icon(Icons.language, size: 20, color: _textColor),
+                title: Text(AppLocalizations.of(context)!.languageInterface, style: TextStyle(color: _textColor)),
+                subtitle: Text(_getLanguageName(_currentLanguage), style: TextStyle(color: _secondaryTextColor, fontSize: 12)),
+                trailing: Icon(Icons.chevron_right, color: _textColor),
+                onTap: () async {
+                  final selected = await TranslationService.showLanguagePicker(
+                    context,
+                    currentLanguage: _currentLanguage,
+                    title: AppLocalizations.of(context)!.languageInterface,
+                  );
+                  if (selected != null && mounted) {
+                    setState(() => _currentLanguage = selected);
+                    // Apply locale immediately
+                    BusinessOrganizerApp.setLocale(context, Locale(selected));
+                    // Save to prefs
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setString('app_language', selected);
+                  }
+                },
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                leading: Icon(Icons.translate, size: 20, color: _textColor),
+                title: Text(AppLocalizations.of(context)!.translationTranslateInterface, style: TextStyle(color: _textColor)),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const TranslationScreen())),
+              ),
+              ListTile(
+                leading: Icon(Icons.edit, size: 20, color: _textColor),
+                title: Text(AppLocalizations.of(context)!.translationEditInterface, style: TextStyle(color: _textColor)),
+                subtitle: Text('${AppLocalizations.of(context)!.editWith} ${_getLanguageName(_currentLanguage)}', style: TextStyle(color: _secondaryTextColor, fontSize: 12)),
+                onTap: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (context) => TranslationEditorScreen(initialLanguage: _currentLanguage),
+                )),
+              ),
+              Divider(height: 30, color: _secondaryTextColor.withValues(alpha: 0.2)),
               ListTile(
                 leading: Icon(Icons.broken_image_outlined, size: 20, color: _textColor),
-                title: Text('Неизползвани снимки', style: TextStyle(color: _textColor)),
+                title: Text(AppLocalizations.of(context)!.orphanedImages, style: TextStyle(color: _textColor)),
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const OrphanedImagesScreen())),
               ),
-              ListTile(leading: Icon(Icons.storage, size: 20, color: _textColor), title: Text('База данни', style: TextStyle(color: _textColor)), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DbViewerScreen()))),
-              ListTile(leading: Icon(Icons.folder_open, size: 20, color: _textColor), title: Text('Файлове', style: TextStyle(color: _textColor)), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LocalFilesViewerScreen()))),
+              ListTile(leading: Icon(Icons.storage, size: 20, color: _textColor), title: Text(AppLocalizations.of(context)!.database, style: TextStyle(color: _textColor)), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DbViewerScreen()))),
+              ListTile(leading: Icon(Icons.folder_open, size: 20, color: _textColor), title: Text(AppLocalizations.of(context)!.files, style: TextStyle(color: _textColor)), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LocalFilesViewerScreen()))),
               const SizedBox(height: 80),
             ],
           ),
           FlyMenu(
             actions: [
-              FlyAction(icon: Icons.close, onTap: _revertAndExit, label: "Отказ"),
-              FlyAction(icon: Icons.check, onTap: _saveAllSettings, label: "Запази"),
+              FlyAction(icon: Icons.close, onTap: _revertAndExit, label: AppLocalizations.of(context)!.cancel),
+              FlyAction(icon: Icons.check, onTap: _saveAllSettings, label: AppLocalizations.of(context)!.save),
             ],
           ),
         ],
       ),
     );
+  }
+
+  String _getLanguageName(String code) {
+    return TranslationService.supportedLanguages[code] ?? code;
   }
 
   Widget _buildNumberInput({required String title, required TextEditingController controller, required int min, required int max, required Function(int) onChanged}) {
@@ -792,7 +841,7 @@ class _OrphanedImagesScreenState extends State<OrphanedImagesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Неизползвани снимки (${_orphanPaths.length})'),
+        title: Text(AppLocalizations.of(context)!.orphanedImagesCount(_orphanPaths.length)),
         actions: [
           if (_orphanPaths.isNotEmpty)
             IconButton(
@@ -801,11 +850,11 @@ class _OrphanedImagesScreenState extends State<OrphanedImagesScreen> {
                 final confirm = await showDialog<bool>(
                   context: context,
                   builder: (ctx) => AlertDialog(
-                    title: const Text('Изтриване на всички'),
-                    content: Text('Изтрий ${_orphanPaths.length} неизползвани снимки?'),
+                    title: Text(AppLocalizations.of(context)!.deleteAllOrphans),
+                    content: Text(AppLocalizations.of(context)!.deleteOrphansConfirm(_orphanPaths.length)),
                     actions: [
-                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отказ')),
-                      TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Изтрий', style: TextStyle(color: Colors.red))),
+                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppLocalizations.of(context)!.cancel)),
+                      TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(AppLocalizations.of(context)!.delete, style: TextStyle(color: Colors.red))),
                     ],
                   ),
                 ) ?? false;
@@ -819,7 +868,7 @@ class _OrphanedImagesScreenState extends State<OrphanedImagesScreen> {
           _isLoading
               ? const Center(child: CircularProgressIndicator())
               : _orphanPaths.isEmpty
-                  ? const Center(child: Text('Няма неизползвани снимки'))
+                  ? Center(child: Text(AppLocalizations.of(context)!.noOrphanedImages))
                   : ListView.builder(
                       padding: const EdgeInsets.all(8),
                       itemCount: _orphanPaths.length,
@@ -844,7 +893,7 @@ class _OrphanedImagesScreenState extends State<OrphanedImagesScreen> {
                     ),
           FlyMenu(
             actions: [
-              FlyAction(icon: Icons.arrow_back, onTap: () => Navigator.pop(context), label: "Назад"),
+              FlyAction(icon: Icons.arrow_back, onTap: () => Navigator.pop(context), label: AppLocalizations.of(context)!.back),
             ],
           ),
         ],

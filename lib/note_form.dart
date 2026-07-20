@@ -13,6 +13,7 @@ import 'package:path/path.dart' as p;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'color_picker_helper.dart';
+import 'l10n/app_localizations.dart';
 
 // StatefulWidget, който дефинира екрана за създаване, редактиране и преглед на детайлите на бележка.
 class NoteFormScreen extends StatefulWidget {
@@ -197,14 +198,14 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
             final Color secondaryContrast = _contrast(Color(_appColor), Colors.black54, Colors.white70);
             return AlertDialog(
               backgroundColor: Color(_appColor),
-              title: Text("Управление на етикети", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: contrastColor)),
+              title: Text(AppLocalizations.of(context)!.manageTags, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: contrastColor)),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (allAvailableTags.isNotEmpty) ...[
-                      Text("Избери:", style: TextStyle(fontSize: 12, color: secondaryContrast)),
+                      Text(AppLocalizations.of(context)!.selectTags, style: TextStyle(fontSize: 12, color: secondaryContrast)),
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 4, runSpacing: 4,
@@ -232,7 +233,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                       ),
                       const SizedBox(height: 16),
                     ],
-                    Text("Нов етикет:", style: TextStyle(fontSize: 12, color: secondaryContrast)),
+                    Text(AppLocalizations.of(context)!.newTagColon, style: TextStyle(fontSize: 12, color: secondaryContrast)),
                     Row(
                       children: [
                         Expanded(
@@ -240,7 +241,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                             controller: _tagController,
                             style: TextStyle(color: contrastColor, fontSize: 13),
                             decoration: InputDecoration(
-                              hintText: "Име...", 
+                              hintText: AppLocalizations.of(context)!.tagHint, 
                               hintStyle: TextStyle(color: secondaryContrast.withValues(alpha: 0.4), fontSize: 13),
                               isDense: true,
                               contentPadding: const EdgeInsets.symmetric(vertical: 8),
@@ -274,7 +275,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: Text("Затвори", style: TextStyle(color: secondaryContrast)),
+                  child: Text(AppLocalizations.of(context)!.close, style: TextStyle(color: secondaryContrast)),
                 ),
               ],
             );
@@ -289,8 +290,8 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
     CroppedFile? croppedFile = await ImageCropper().cropImage(
       sourcePath: path,
       uiSettings: [
-        AndroidUiSettings(toolbarTitle: 'Изрязване', toolbarColor: Colors.deepPurple, toolbarWidgetColor: Colors.white, initAspectRatio: CropAspectRatioPreset.original, lockAspectRatio: false),
-        IOSUiSettings(title: 'Изрязване'),
+        AndroidUiSettings(toolbarTitle: AppLocalizations.of(context)!.noteFormCropTitle, toolbarColor: Colors.deepPurple, toolbarWidgetColor: Colors.white, initAspectRatio: CropAspectRatioPreset.original, lockAspectRatio: false),
+        IOSUiSettings(title: AppLocalizations.of(context)!.noteFormCropTitle),
       ],
     );
     return croppedFile?.path;
@@ -485,7 +486,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
         setState(() => _isEditing = false);
         Navigator.pop(context);
       }
-    } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Грешка запис: $e'), backgroundColor: Colors.red)); }
+    } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.saveError(e.toString())), backgroundColor: Colors.red)); }
   }
 
   // Управлява навигацията към следваща или предишна бележка чрез плъзгане по екрана.
@@ -699,12 +700,12 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       double res = _evaluateExpression(expr);
       String resStr = "= ${res.toStringAsFixed(2).replaceAll(RegExp(r'\.00$'), '')}";
       Clipboard.setData(ClipboardData(text: resStr));
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$expr $resStr (Копирано)"), duration: const Duration(seconds: 5)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.copiedResult(expr, resStr)), duration: const Duration(seconds: 5)));
       _contentController.setHighlights(newHighlights, _textColor.withValues(alpha: 0.3), _textColor);
       if (!_isEditing) {
         setState(() { _isEditing = true; });
       }
-    } catch (e) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Грешка при изчисление: $expr"))); }
+    } catch (e) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.calculationError(expr)))); }
   }
   // Изпълнява самото математическо изчисление върху извлечения текстов израз.
   double _evaluateExpression(String expr) {
@@ -837,11 +838,11 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: Color(_appColor),
-          title: Text('Изтриване', style: TextStyle(color: _contrast(Color(_appColor), Colors.black, Colors.white))),
-          content: Text('Сигурни ли сте, че искате да изтриете тази бележка?', style: TextStyle(color: _contrast(Color(_appColor), Colors.black87, Colors.white70))),
+          title: Text(AppLocalizations.of(context)!.deleting, style: TextStyle(color: _contrast(Color(_appColor), Colors.black, Colors.white))),
+          content: Text(AppLocalizations.of(context)!.confirmDeleteNote, style: TextStyle(color: _contrast(Color(_appColor), Colors.black87, Colors.white70))),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Отказ', style: TextStyle(color: _contrast(Color(_appColor), Colors.black54, Colors.white60)))),
-            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Изтрий', style: TextStyle(color: _contrast(Color(_appColor), Colors.black54, Colors.white60)))),
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppLocalizations.of(context)!.cancel, style: TextStyle(color: _contrast(Color(_appColor), Colors.black54, Colors.white60)))),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(AppLocalizations.of(context)!.delete, style: TextStyle(color: _contrast(Color(_appColor), Colors.black54, Colors.white60)))),
           ],
         ),
       ) ?? false;
@@ -865,7 +866,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
       if (await canLaunchUrl(url)) { await launchUrl(url, mode: LaunchMode.externalApplication); return; }
     }
     if (!mounted) return;
-    Navigator.push(context, MaterialPageRoute(builder: (context) => FullScreenImage(imagePath: _imagePath!, title: _titleController.text.isEmpty ? "Преглед" : _titleController.text)));
+    Navigator.push(context, MaterialPageRoute(builder: (context) => FullScreenImage(imagePath: _imagePath!, title: _titleController.text.isEmpty ? AppLocalizations.of(context)!.viewNote : _titleController.text)));
   }
 
   @override
@@ -897,14 +898,14 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
           context: context,
           builder: (context) => AlertDialog(
             backgroundColor: Color(_appColor),
-            title: Text('Отхвърляне на промените?', style: TextStyle(color: _contrast(Color(_appColor), Colors.black, Colors.white))),
-            content: Text('Имате незапазени промени. Сигурни ли сте, че искате да излезете?', style: TextStyle(color: _contrast(Color(_appColor), Colors.black87, Colors.white70))),
+            title: Text(AppLocalizations.of(context)!.discardChanges, style: TextStyle(color: _contrast(Color(_appColor), Colors.black, Colors.white))),
+            content: Text(AppLocalizations.of(context)!.unsavedChanges, style: TextStyle(color: _contrast(Color(_appColor), Colors.black87, Colors.white70))),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context, false), child: Text('Отказ', style: TextStyle(color: _contrast(Color(_appColor), Colors.black54, Colors.white60)))),
+              TextButton(onPressed: () => Navigator.pop(context, false), child: Text(AppLocalizations.of(context)!.cancel, style: TextStyle(color: _contrast(Color(_appColor), Colors.black54, Colors.white60)))),
               TextButton(onPressed: () {
                 if (_sessionFileCreated && _imagePath != null && _isLocalCopy == 1) { try { File(_imagePath!).deleteSync(); } catch (e) { debugPrint("Грешка чистене при изход: $e"); } }
                 Navigator.pop(context, true);
-              }, child: Text('Отхвърли', style: TextStyle(color: _contrast(Color(_appColor), Colors.black54, Colors.white60)))),
+              }, child: Text(AppLocalizations.of(context)!.discard, style: TextStyle(color: _contrast(Color(_appColor), Colors.black54, Colors.white60)))),
             ],
           ),
         ) ?? false;
@@ -923,9 +924,9 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
             icon: const Icon(Icons.arrow_back),
             onPressed: () => Navigator.maybePop(context),
           ),
-          title: Text(_isEditing ? (widget.item?['id'] == null ? 'Нова бележка' : 'Редактиране') : 'Преглед', style: TextStyle(color: _textColor)),
+          title: Text(_isEditing ? (widget.item?['id'] == null ? AppLocalizations.of(context)!.newNote : AppLocalizations.of(context)!.editNote) : AppLocalizations.of(context)!.viewNote, style: TextStyle(color: _textColor)),
           actions: [
-            if (!_isEditing) IconButton(icon: const Icon(Icons.calculate_outlined), color: _textColor, onPressed: _calculateNote, tooltip: 'Калкулатор'),
+            if (!_isEditing) IconButton(icon: const Icon(Icons.calculate_outlined), color: _textColor, onPressed: _calculateNote, tooltip: AppLocalizations.of(context)!.noteFormCalculator),
             if (widget.item?['id'] != null) IconButton(icon: const Icon(Icons.delete_outline), color: _textColor, onPressed: _deleteNote),
             if (!_isEditing) IconButton(icon: const Icon(Icons.edit), color: _textColor, onPressed: () => setState(() => _isEditing = true))
             else IconButton(icon: const Icon(Icons.save), color: _textColor, onPressed: _save),
@@ -973,14 +974,14 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                             padding: const EdgeInsets.only(right: 8.0),
                             onPressed: _moveFirstParagraphToTitle,
                             icon: Icon(Icons.arrow_upward, size: 18, color: _secondaryTextColor),
-                            tooltip: 'Премести първия параграф към заглавието',
+                            tooltip: AppLocalizations.of(context)!.noteFormMoveToTitle,
                           ),
                         Expanded(
                           child: TextField(
                             controller: _titleController,
                             maxLines: null,
                             style: TextStyle(fontSize: _fontSizeTitle, fontWeight: FontWeight.bold, color: _textColor),
-                            decoration: InputDecoration(hintText: 'Заглавие', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor), contentPadding: EdgeInsets.zero, isDense: true),
+                            decoration: InputDecoration(hintText: AppLocalizations.of(context)!.titleHint, border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor), contentPadding: EdgeInsets.zero, isDense: true),
                             contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
                           ),
                         ),
@@ -990,7 +991,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                             padding: const EdgeInsets.only(left: 8.0),
                             onPressed: () => _titleController.clear(),
                             icon: Icon(Icons.close, size: 18, color: _secondaryTextColor),
-                            tooltip: 'Изчисти заглавието',
+                            tooltip: AppLocalizations.of(context)!.noteFormClearTitle,
                           ),
                       ],
                     ),
@@ -1021,11 +1022,11 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                       decoration: BoxDecoration(border: Border(bottom: BorderSide(color: _textColor.withValues(alpha: 0.1), width: 1.0))),
                       child: Row(
                         children: [
-                          IconButton(icon: const Icon(Icons.first_page), onPressed: _moveToLineStart, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Начало на ред'),
+                          IconButton(icon: const Icon(Icons.first_page), onPressed: _moveToLineStart, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: AppLocalizations.of(context)!.noteFormLineStart),
                           const Spacer(),
                           GestureDetector(
                             onTap: () => setState(() => _forceTwoDecimals = !_forceTwoDecimals),
-                            child: Tooltip(message: 'Суми с 2 знака', child: Row(
+                            child: Tooltip(message: AppLocalizations.of(context)!.noteFormTwoDecimals, child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(_forceTwoDecimals ? Icons.check : Icons.close, size: 12, color: _secondaryTextColor),
@@ -1034,11 +1035,11 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                             )),
                           ),
                           const SizedBox(width: 8),
-                          IconButton(icon: const Icon(Icons.keyboard_tab), onPressed: _moveToLineEndOrTab, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Край на ред / Таб'),
+                          IconButton(icon: const Icon(Icons.keyboard_tab), onPressed: _moveToLineEndOrTab, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: AppLocalizations.of(context)!.noteFormLineEndTab),
                           const SizedBox(width: 8),
-                          IconButton(icon: const Icon(Icons.control_point_duplicate), onPressed: _duplicateCurrentLine, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Дублирай реда'),
+                          IconButton(icon: const Icon(Icons.control_point_duplicate), onPressed: _duplicateCurrentLine, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: AppLocalizations.of(context)!.noteFormDuplicateLine),
                           const SizedBox(width: 8),
-                          IconButton(icon: const Icon(Icons.delete_sweep_outlined), onPressed: _deleteCurrentLine, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: 'Изтрий реда'),
+                          IconButton(icon: const Icon(Icons.delete_sweep_outlined), onPressed: _deleteCurrentLine, color: _secondaryTextColor, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, tooltip: AppLocalizations.of(context)!.noteFormDeleteLine),
                         ],
                       ),
                     ),
@@ -1076,9 +1077,9 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                         bottom: 8,
                                         child: Row(
                                           children: [
-                                            _buildEditButton(Icons.delete_outline, _removeImage, 'Изтрий снимката'),
+                                            _buildEditButton(Icons.delete_outline, _removeImage, AppLocalizations.of(context)!.noteFormDeleteImage),
                                             const SizedBox(width: 8),
-                                            _buildEditButton(Icons.crop, _editExistingImage, 'Изрежи снимката'),
+                                            _buildEditButton(Icons.crop, _editExistingImage, AppLocalizations.of(context)!.noteFormCropImage),
                                           ],
                                         ),
                                       ),
@@ -1094,7 +1095,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                                   focusNode: _contentFocusNode,
                                   maxLines: null,
                                   style: TextStyle(fontSize: _fontSizeContent, color: _textColor, height: 1.2),
-                                  decoration: InputDecoration(hintText: 'Съдържание...', border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor), contentPadding: EdgeInsets.zero),
+                                  decoration: InputDecoration(hintText: AppLocalizations.of(context)!.contentHint, border: InputBorder.none, hintStyle: TextStyle(color: _secondaryTextColor), contentPadding: EdgeInsets.zero),
                                   onChanged: _onContentChanged,
                                   onSubmitted: (v) => _save(),
                                   contextMenuBuilder: (context, editableTextState) => AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState),
@@ -1161,15 +1162,15 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                               Padding(
                                 padding: const EdgeInsets.only(top: 10, left: 16, right: 16),
                                 child: SwitchListTile(
-                                  title: Text("Копирай локално", style: TextStyle(fontSize: 14, color: _textColor)),
-                                  subtitle: Text("Запазва снимката, дори да бъде изтрита от галерията", style: TextStyle(fontSize: 11, color: _secondaryTextColor)),
+                                  title: Text(AppLocalizations.of(context)!.noteFormCopyLocal, style: TextStyle(fontSize: 14, color: _textColor)),
+                                  subtitle: Text(AppLocalizations.of(context)!.noteFormCopyLocalDesc, style: TextStyle(fontSize: 11, color: _secondaryTextColor)),
                                   value: _shouldCopyLocally,
                                   activeThumbColor: Colors.blue,
                                   onChanged: (val) async {
                                     if (val == false) {
                                       final bool confirm = await showDialog<bool>(context: context, builder: (c) => AlertDialog(
-                                        title: const Text('Внимание'), content: const Text('Ако изключите локалното копиране, приложението ще разчита на временен файл в кеша. Ако кешът бъде изчистен, файлът ще изчезне.'),
-                                        actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Отказ')), TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Изключи', style: TextStyle(color: Colors.red)))],
+                                        title: Text(AppLocalizations.of(context)!.noteFormCopyLocalWarning), content: Text(AppLocalizations.of(context)!.noteFormCopyLocalWarningDesc),
+                                        actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: Text(AppLocalizations.of(context)!.cancel)), TextButton(onPressed: () => Navigator.pop(c, true), child: Text(AppLocalizations.of(context)!.noteFormCopyLocalDisable, style: TextStyle(color: Colors.red)))],
                                       )) ?? false;
                                       if (confirm) setState(() => _shouldCopyLocally = false);
                                     } else { setState(() => _shouldCopyLocally = true); }
@@ -1188,11 +1189,11 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
               ],
             ),
             FlyMenu(actions: [
-              if (widget.item?['id'] != null) FlyAction(icon: Icons.delete, onTap: _deleteNote, label: "Изтрий"),
-              FlyAction(icon: Icons.arrow_back, onTap: () => Navigator.maybePop(context), label: "Назад"),
-              if (_isEditing) FlyAction(icon: Icons.save, onTap: _save, label: "Запази"),
-              if (!_isEditing) FlyAction(icon: Icons.calculate_outlined, onTap: _calculateNote, label: "Калкулатор"),
-              if (!_isEditing) FlyAction(icon: Icons.edit, onTap: () => setState(() => _isEditing = true), label: "Редактирай"),
+              if (widget.item?['id'] != null) FlyAction(icon: Icons.delete, onTap: _deleteNote, label: AppLocalizations.of(context)!.delete),
+              FlyAction(icon: Icons.arrow_back, onTap: () => Navigator.maybePop(context), label: AppLocalizations.of(context)!.back),
+              if (_isEditing) FlyAction(icon: Icons.save, onTap: _save, label: AppLocalizations.of(context)!.save),
+              if (!_isEditing) FlyAction(icon: Icons.calculate_outlined, onTap: _calculateNote, label: AppLocalizations.of(context)!.noteFormCalculator),
+              if (!_isEditing) FlyAction(icon: Icons.edit, onTap: () => setState(() => _isEditing = true), label: AppLocalizations.of(context)!.noteFormEdit),
             ]),
           ],
         ),
@@ -1237,12 +1238,12 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
           const Divider(),
           Row(
             children: [
-              IconButton(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, icon: const Icon(Icons.photo_library, size: 20), onPressed: _pickFromGallery, tooltip: 'Галерия'),
-              IconButton(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, icon: const Icon(Icons.camera_alt, size: 20), onPressed: _pickFromCamera, tooltip: 'Камера'),
-              IconButton(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, icon: const Icon(Icons.label_outline, size: 20), onPressed: _showTagsDialog, tooltip: 'Етикети'),
-              IconButton(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, icon: const Icon(Icons.format_list_bulleted, size: 20), onPressed: () => _toggleList('bullet'), tooltip: 'Списък'),
-              IconButton(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, icon: const Icon(Icons.format_list_numbered, size: 20), onPressed: () => _toggleList('number'), tooltip: 'Номериран списък'),
-              IconButton(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, icon: const Icon(Icons.checklist, size: 20), onPressed: () => _toggleList('check'), tooltip: 'Пазаруване'),
+              IconButton(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, icon: const Icon(Icons.photo_library, size: 20), onPressed: _pickFromGallery, tooltip: AppLocalizations.of(context)!.noteFormGallery),
+              IconButton(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, icon: const Icon(Icons.camera_alt, size: 20), onPressed: _pickFromCamera, tooltip: AppLocalizations.of(context)!.noteFormCamera),
+              IconButton(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, icon: const Icon(Icons.label_outline, size: 20), onPressed: _showTagsDialog, tooltip: AppLocalizations.of(context)!.noteFormTags),
+              IconButton(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, icon: const Icon(Icons.format_list_bulleted, size: 20), onPressed: () => _toggleList('bullet'), tooltip: AppLocalizations.of(context)!.noteFormBulletList),
+              IconButton(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, icon: const Icon(Icons.format_list_numbered, size: 20), onPressed: () => _toggleList('number'), tooltip: AppLocalizations.of(context)!.noteFormNumberedList),
+              IconButton(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, icon: const Icon(Icons.checklist, size: 20), onPressed: () => _toggleList('check'), tooltip: AppLocalizations.of(context)!.noteFormChecklist),
               const Spacer(),
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -1254,7 +1255,7 @@ class _NoteFormScreenState extends State<NoteFormScreen> {
                     onPressed: () => setState(() => _isTask = !_isTask),
                   ),
                   const SizedBox(width: 4),
-                  Text('Задача', style: TextStyle(color: _secondaryTextColor, fontSize: 12)),
+                  Text(AppLocalizations.of(context)!.noteFormTask, style: TextStyle(color: _secondaryTextColor, fontSize: 12)),
                 ],
               ),
             ],
